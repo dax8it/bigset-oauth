@@ -180,15 +180,18 @@ export async function runHermesPopulate(args: HermesPopulateArgs): Promise<strin
 
           if ((await currentRowCount()) >= maxRowCount) return;
 
-          const result = (await tools.insert_row.execute?.({
-            data,
-            sources: investigation.sources,
-            row_summary: investigation.row_summary || undefined,
-            how_found: investigation.how_found || undefined,
-            // Tool input is validated by the tool's own zod schema at the
-            // Mastra layer when called by an agent; calling execute directly
-            // bypasses that wrapper, so the cast mirrors the schema shape.
-          } as never)) as InsertOutcome | undefined;
+          // Calling the tool's execute directly (outside an agent run):
+          // first arg mirrors the tool's input schema, second is an empty
+          // ToolExecutionContext (all of its fields are optional).
+          const result = (await tools.insert_row.execute?.(
+            {
+              data,
+              sources: investigation.sources,
+              row_summary: investigation.row_summary || undefined,
+              how_found: investigation.how_found || undefined,
+            } as never,
+            {} as never,
+          )) as InsertOutcome | undefined;
 
           if (!result) {
             failures++;

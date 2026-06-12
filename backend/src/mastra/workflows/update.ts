@@ -130,13 +130,18 @@ const refreshRowsStep = createStep({
         return;
       }
 
-      const result = (await hermesTools!.update_row.execute?.({
-        rowId: row._id,
-        data: outcome.data,
-        sources: outcome.sources,
-        row_summary: outcome.row_summary,
-        how_found: outcome.how_found,
-      } as never)) as { success: boolean; error?: string } | undefined;
+      // Direct execute call (outside an agent run): input per the tool's
+      // schema, plus an empty ToolExecutionContext (all fields optional).
+      const result = (await hermesTools!.update_row.execute?.(
+        {
+          rowId: row._id,
+          data: outcome.data,
+          sources: outcome.sources,
+          row_summary: outcome.row_summary,
+          how_found: outcome.how_found,
+        } as never,
+        {} as never,
+      )) as { success: boolean; error?: string } | undefined;
 
       if (result?.success) {
         updatedCount++;

@@ -164,6 +164,8 @@ the models BigSet uses for schema inference and agents.
 
 OpenRouter is pay-as-you-go; $5-10 is plenty to start.
 
+> **No TinyFish/OpenRouter accounts? Use hermes mode.** BigSet can run entirely on local software: [hermes-agent](https://hermes-agent.nousresearch.com) (with its built-in **OpenAI Codex / ChatGPT OAuth** provider, i.e. GPT-5.5 on your ChatGPT subscription) replaces both OpenRouter *and* TinyFish. Set `LLM_PROVIDER_MODE=hermes` in `.env` — full setup guide in [HERMES_MODE.md](./HERMES_MODE.md).
+
 > **Note:** root `.env` is the only local env file. If you edit Convex functions in `frontend/convex/`, run `make convex-push` to deploy the changes.
 
 > **Free tier:** cloud signed-in accounts get **2,500 row operations per calendar month** (resets on the 1st, UTC). Local mode bypasses the cloud quota and uses your TinyFish/OpenRouter accounts directly.
