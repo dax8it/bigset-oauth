@@ -2,6 +2,8 @@ import { generateText, Output, NoObjectGeneratedError } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 
 import { DEFAULT_MODEL_IDS } from "../config/models.js";
+import { env } from "../env.js";
+import { hermesJsonChat } from "../hermes/client.js";
 import { requireOpenRouterApiKey } from "../local-credentials.js";
 import { datasetSchemaSchema, type DatasetSchema } from "./types.js";
 
@@ -37,7 +39,50 @@ async function getModel(modelSlug?: string) {
   return openrouter(resolvedSlug);
 }
 
+/**
+ * JSON shape contract appended to the system prompt in hermes mode.
+ *
+ * The hermes API server is an agent endpoint — it doesn't support the AI
+ * SDK's structured-output (`response_format`) path, so we describe the
+ * exact JSON shape in-prompt and validate with the same Zod schema.
+ * hermesJsonChat retries once with the validation error on failure,
+ * mirroring the NoObjectGeneratedError retry below.
+ */
+const HERMES_JSON_INSTRUCTIONS = `
+
+OUTPUT FORMAT — reply with ONLY a single JSON object (no prose, no markdown fences) of this exact shape:
+{
+  "dataset_name": "snake_case_string",
+  "description": "string",
+  "columns": [
+    {
+      "name": "snake_case_string",
+      "display_name": "string",
+      "type": "string" | "url" | "date" | "number" | "boolean" | "enum",
+      "is_primary_key": boolean,
+      "is_enumerable": boolean,
+      "retrieval_hint": "string",
+      "nullable": boolean
+    }
+  ],
+  "primary_key": "column_name" or ["col_a", "col_b"],
+  "retrieval_strategy": "search_fetch" | "browser" | "hybrid",
+  "source_hint": "string (specific URL when possible)"
+}
+Do NOT use any web tools for this task — answer directly from the prompt.`;
+
+async function inferSchemaViaHermes(prompt: string): Promise<DatasetSchema> {
+  const { value } = await hermesJsonChat(prompt, datasetSchemaSchema, {
+    system: SYSTEM_PROMPT + HERMES_JSON_INSTRUCTIONS,
+    timeoutMs: env.HERMES_CHAT_TIMEOUT_MS,
+  });
+  return value;
+}
+
 export async function inferSchema(prompt: string, modelSlug?: string): Promise<DatasetSchema> {
+  if (env.IS_HERMES_MODE) {
+    return await inferSchemaViaHermes(prompt);
+  }
   const model = await getModel(modelSlug);
   try {
     return await callOnce(model, prompt);
