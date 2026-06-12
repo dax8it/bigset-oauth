@@ -1,6 +1,7 @@
 import { convex, internal } from "./convex.js";
 import { env } from "./env.js";
 import { FETCH_TIMEOUT_MS } from "./fetch-timeout.js";
+import { verifyHermesEndpoint } from "./hermes/client.js";
 import {
   getKeychainCredential,
   setKeychainCredential,
@@ -130,6 +131,21 @@ async function withFetchTimeout<T>(
 }
 
 export async function requireLocalSetupComplete(): Promise<void> {
+  if (env.IS_HERMES_MODE) {
+    // hermes mode: the only dependency is a reachable hermes-agent API
+    // server (which carries the Codex/ChatGPT OAuth credentials itself).
+    // No TinyFish or OpenRouter keys are required.
+    try {
+      await verifyHermesEndpoint();
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `hermes-agent is not reachable at ${env.HERMES_BASE_URL}. ` +
+          `Start it with \`hermes gateway\` (API_SERVER_ENABLED=true) and check HERMES_API_KEY. ${detail}`,
+      );
+    }
+    return;
+  }
   if (!env.IS_LOCAL_MODE) return;
   const status = await getLocalSetupStatus();
   if (!status.complete) {
@@ -138,6 +154,37 @@ export async function requireLocalSetupComplete(): Promise<void> {
 }
 
 export async function getLocalSetupStatus(): Promise<LocalSetupStatus> {
+  if (env.IS_HERMES_MODE) {
+    // hermes mode: report the hermes endpoint's health under both service
+    // slots so the existing setup UI shows green without asking for
+    // TinyFish/OpenRouter keys. Web access AND LLM calls are both served
+    // by hermes (Codex GPT-5.5 via ChatGPT OAuth, configured in hermes).
+    let reachable = true;
+    let verifiedAt: number | null = null;
+    try {
+      await verifyHermesEndpoint();
+      verifiedAt = Date.now();
+    } catch (err) {
+      reachable = false;
+      console.warn(
+        `[local-setup] hermes-agent not reachable at ${env.HERMES_BASE_URL}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+    const service: ServiceSetupStatus = {
+      configured: reachable,
+      source: reachable ? "env" : null,
+      connectionMethod: reachable ? "oauth" : null,
+      verifiedAt,
+    };
+    return {
+      mode: env.IS_LOCAL_MODE ? "local" : "production",
+      required: !reachable,
+      complete: reachable,
+      services: { tinyfish: service, openrouter: service },
+    };
+  }
+
   if (!env.IS_LOCAL_MODE) {
     const tinyfish = envCredential("tinyfish");
     const openrouter = envCredential("openrouter");

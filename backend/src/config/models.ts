@@ -45,10 +45,29 @@ export const MODEL_ROLES = [
 export const EXCLUDED_MODEL_SLUGS: string[] = [];
 
 /**
+ * hermes mode: the model catalog is a single fixed entry. The hermes API
+ * server's `model` field is cosmetic — the real provider/model (OpenAI
+ * Codex → GPT-5.5 via ChatGPT OAuth) is configured inside hermes itself,
+ * so there is nothing to fetch, price, or pick from OpenRouter.
+ */
+function hermesStaticModels(): OpenRouterModel[] {
+  return [
+    {
+      modelName: "hermes-agent (Codex GPT-5.5 via ChatGPT OAuth)",
+      canonicalSlug: env.HERMES_MODEL,
+      contextLength: 0,
+      completionCost: 0,
+      promptCost: 0,
+    },
+  ];
+}
+
+/**
  * Fetch all cached models from Convex.
  * If the cache is empty, fetches from OpenRouter, stores in Convex, and returns.
  */
 export async function getCachedModels(): Promise<OpenRouterModel[]> {
+  if (env.IS_HERMES_MODE) return hermesStaticModels();
   const models = await convex.query(api.openRouterModels.list, {});
   const cached = models as unknown as OpenRouterModel[];
   if (cached.length > 0) return cached;
@@ -67,6 +86,9 @@ export async function validateModelSlug(
   slug: string,
   role: "schemaInference" | "populateOrchestrator" | "investigateSubagent"
 ): Promise<void> {
+  // hermes mode: slugs are cosmetic (hermes uses its own configured
+  // provider/model), so any value is acceptable.
+  if (env.IS_HERMES_MODE) return;
   const models = await getCachedModels();
   const found = models.some((m) => m.canonicalSlug === slug);
   if (!found) {
@@ -118,6 +140,15 @@ export async function getModelConfig(
   populateOrchestrator: string;
   investigateSubagent: string;
 }> {
+  // hermes mode: every role runs through the single hermes endpoint and
+  // the slug is cosmetic — ignore any stored per-user OpenRouter config.
+  if (env.IS_HERMES_MODE) {
+    return {
+      schemaInference: env.HERMES_MODEL,
+      populateOrchestrator: env.HERMES_MODEL,
+      investigateSubagent: env.HERMES_MODEL,
+    };
+  }
   const config = await convex.query(internal.modelConfig.getInternal, { userId });
   return {
     schemaInference: config?.schemaInference ?? DEFAULT_MODEL_IDS.SCHEMA_INFERENCE,
@@ -131,6 +162,9 @@ export async function getModelConfig(
  * for Convex storage.
  */
 export async function fetchModelsFromOpenRouter(): Promise<OpenRouterModel[]> {
+  // hermes mode: never call OpenRouter — the /openrouter/refresh route
+  // funnels here, so returning the static entry keeps that route working.
+  if (env.IS_HERMES_MODE) return hermesStaticModels();
   const apiKey = await requireOpenRouterApiKey();
 
   const baseUrl = (process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1").replace(/\/+$/, "");
