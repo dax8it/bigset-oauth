@@ -28,14 +28,12 @@ import {
   type DiscoveredEntity,
 } from "./research.js";
 
-const MAX_DISCOVERY_ROUNDS = 5;
+import {
+  computeHermesPopulatePlan,
+  requestedRowCount,
+} from "./populate-plan.js";
 
-function explicitLeadingRowCount(text: string): number | null {
-  const match = text.trim().match(/^(\d{1,2})\b/);
-  if (!match) return null;
-  const count = Number(match[1]);
-  return Number.isFinite(count) && count > 0 ? count : null;
-}
+const MAX_DISCOVERY_ROUNDS = 5;
 
 export interface HermesPopulateArgs {
   authorizedDatasetId: string;
@@ -72,12 +70,16 @@ export async function runHermesPopulate(args: HermesPopulateArgs): Promise<strin
     metrics,
   } = args;
 
-  const requestedCount = explicitLeadingRowCount(description);
-  const maxRowCount = Math.min(
-    args.maxRowCount,
-    requestedCount ?? args.maxRowCount,
-    env.HERMES_MAX_ROWS,
-  );
+  const requestedCount = requestedRowCount(description);
+  const initialPlan = computeHermesPopulatePlan({
+    requestedMaxRowCount: args.maxRowCount,
+    requestedCount,
+    envMaxRows: env.HERMES_MAX_ROWS,
+    batchMaxRows: env.HERMES_BATCH_MAX_ROWS,
+    currentRowCount: 0,
+    maxCandidatesPerRound: env.HERMES_MAX_CANDIDATES_PER_ROUND,
+  });
+  const maxRowCount = initialPlan.maxRowCount;
 
   const tools = buildPopulateTools(authorizedDatasetId, authContext);
   const signal = getSignal(authorizedDatasetId);
@@ -103,15 +105,19 @@ export async function runHermesPopulate(args: HermesPopulateArgs): Promise<strin
     throwIfAborted(signal);
 
     const rowCount = await currentRowCount();
-    const remaining = maxRowCount - rowCount;
-    if (remaining <= 0 || quotaHit) break;
+    const plan = computeHermesPopulatePlan({
+      requestedMaxRowCount: args.maxRowCount,
+      requestedCount,
+      envMaxRows: env.HERMES_MAX_ROWS,
+      batchMaxRows: env.HERMES_BATCH_MAX_ROWS,
+      currentRowCount: rowCount,
+      maxCandidatesPerRound: env.HERMES_MAX_CANDIDATES_PER_ROUND,
+    });
+    if (plan.remainingRows <= 0 || quotaHit) break;
 
-    const want = Math.min(
-      Math.ceil(remaining * 1.5) + 2,
-      env.HERMES_MAX_CANDIDATES_PER_ROUND,
-    );
+    const want = plan.discoveryCount;
     console.log(
-      `[hermes-populate] ${logCtx} round=${round + 1} rows=${rowCount}/${maxRowCount} discovering=${want}`,
+      `[hermes-populate] ${logCtx} round=${round + 1} rows=${rowCount}/${maxRowCount} batchTarget=${plan.batchTargetRowCount} discovering=${want}`,
     );
 
     let candidates: DiscoveredEntity[];
@@ -151,16 +157,16 @@ export async function runHermesPopulate(args: HermesPopulateArgs): Promise<strin
       break;
     }
 
-    // Budget: never dispatch more investigations than rows still needed,
-    // with a small overshoot to absorb not-found / duplicate outcomes.
-    let budget = remaining + Math.ceil(remaining / 2);
+    // Budget: never dispatch more investigations than this bounded batch
+    // needs, with a small overshoot to absorb not-found / duplicate outcomes.
+    let budget = plan.investigationBudget;
 
     await withConcurrency(
       fresh,
       async (entity) => {
         if (quotaHit || budget <= 0) return;
         throwIfAborted(signal);
-        if ((await currentRowCount()) >= maxRowCount) return;
+        if ((await currentRowCount()) >= plan.batchTargetRowCount) return;
         budget--;
 
         metrics.investigateCalls++;
@@ -193,7 +199,7 @@ export async function runHermesPopulate(args: HermesPopulateArgs): Promise<strin
             }
           }
 
-          if ((await currentRowCount()) >= maxRowCount) return;
+          if ((await currentRowCount()) >= plan.batchTargetRowCount) return;
 
           // Calling the tool's execute directly (outside an agent run):
           // first arg mirrors the tool's input schema, second is an empty

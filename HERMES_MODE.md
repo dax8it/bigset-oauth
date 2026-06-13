@@ -22,7 +22,8 @@ The goal is to run BigSet without OpenRouter credits or TinyFish API keys while 
 - Convex storage and realtime UI updates;
 - primary-key deduplication;
 - scheduled refreshes;
-- CSV/XLSX export.
+- CSV/XLSX export;
+- optional script-based HTML/PDF report export and SMTP delivery to yourself or a client.
 
 Hermes Agent already has two things BigSet needs:
 
@@ -30,6 +31,8 @@ Hermes Agent already has two things BigSet needs:
 2. its own tool runtime for web search, extraction, and browser work.
 
 When Hermes is configured with the `openai-codex` provider, the actual LLM behind BigSet is a Codex-visible model from the user's ChatGPT/Codex OAuth account. BigSet never stores or refreshes the ChatGPT OAuth token; Hermes owns that.
+
+The preferred user-facing workflow is the Hermes skill named `bigset`: ask a short discovery set first, then produce the bounded source-verifiable prompt. This keeps BigSet runs from drifting into broad generic crawls and makes 10-row demos / 25-row production datasets more reliable.
 
 ---
 
@@ -165,6 +168,24 @@ make dev
 Open http://localhost:3500.
 
 ---
+## Agent-operated dataset delivery
+
+A complete local production run can be operated from the CLI after a dataset is live:
+
+```bash
+node scripts/with-root-env.mjs node scripts/export-dataset-report.mjs \
+  --dataset-id <dataset_id> \
+  --title "Client-ready BigSet report"
+
+EMAIL_TO=client@example.com \
+EMAIL_ATTACHMENT=artifacts/dataset-reports/<dataset_id>/report.pdf \
+python3 scripts/send-dataset-report.py
+```
+
+The report exporter reads the trusted local CLI endpoints, writes `dataset.json`, `report.html`, and optionally `report.pdf` through `wkhtmltopdf`. The SMTP sender uses environment variables only; do not commit mail credentials.
+
+---
+
 
 ## Environment variables
 
@@ -177,8 +198,9 @@ Open http://localhost:3500.
 | `HERMES_CHAT_TIMEOUT_MS` | `180000` | no | Timeout for schema/non-web calls. |
 | `HERMES_DISCOVERY_TIMEOUT_MS` | `120000` | no | Timeout for fast candidate discovery. |
 | `HERMES_RESEARCH_TIMEOUT_MS` | `480000` | no | Timeout for per-entity research and refresh. |
-| `HERMES_MAX_ROWS` | `10` | no | Local safety cap for populate runs. Explicit leading prompt counts below this cap are respected. |
-| `HERMES_MAX_CANDIDATES_PER_ROUND` | `8` | no | Local safety cap for discovery candidates per round. |
+| `HERMES_MAX_ROWS` | `25` | no | Overall local safety cap for populate runs. Prompt counts such as `25 companies` are respected up to this cap. |
+| `HERMES_BATCH_MAX_ROWS` | `10` | no | Per-batch row target. Larger runs are split into bounded batches instead of one large agentic wave. |
+| `HERMES_MAX_CANDIDATES_PER_ROUND` | `15` | no | Local safety cap for discovery candidates per bounded batch. |
 | `HERMES_MAX_CONCURRENT` | `2` | no | Parallel per-entity research calls. |
 
 Recommended local defaults:
@@ -187,8 +209,9 @@ Recommended local defaults:
 HERMES_DISCOVERY_TIMEOUT_MS=120000
 HERMES_CHAT_TIMEOUT_MS=180000
 HERMES_RESEARCH_TIMEOUT_MS=480000
-HERMES_MAX_ROWS=10
-HERMES_MAX_CANDIDATES_PER_ROUND=8
+HERMES_MAX_ROWS=25
+HERMES_BATCH_MAX_ROWS=10
+HERMES_MAX_CANDIDATES_PER_ROUND=15
 HERMES_MAX_CONCURRENT=2
 ```
 

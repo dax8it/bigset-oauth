@@ -22,6 +22,70 @@ Example prompt:
 
 BigSet infers a schema, researches public web sources, writes verified rows into Convex, and exports CSV/XLSX. Datasets can be refreshed on a schedule.
 
+## What this repo demonstrates
+
+This branch is packaged as a public, reproducible reference for running BigSet with Hermes Agent and Codex OAuth:
+
+- BigSet turns natural-language dataset ideas into typed, refreshable datasets.
+- Hermes Agent supplies the model/runtime layer through its OpenAI-compatible API server.
+- Hermes can use the `openai-codex` provider, so the same ChatGPT/Codex OAuth account that powers Hermes can power BigSet research without putting OAuth tokens in BigSet.
+- The agent-led `bigset` skill keeps prompts bounded and source-verifiable before population starts.
+- Completed datasets can be used in the UI, exported as CSV/XLSX, rendered into HTML/PDF reports, and emailed to yourself or a client with your own SMTP credentials.
+
+The current explainer video source and rendered media live in `artifacts/bigset-hermes-x-video/`.
+
+
+## BigSet skill workflow
+
+The preferred user workflow is agent-led, not manual prompt-writing.
+
+When a user says “make a BigSet,” “create a new dataset,” or “build a dataset for this client,” load the Hermes skill named `bigset` and run a short discovery pass before creating the dataset prompt. The agent should clarify:
+
+1. business goal — what decision/action the dataset should drive;
+2. row target — companies, local businesses, venues, events, products, creators, jobs, RFPs, etc.;
+3. scope — geography, industry, audience, source constraints;
+4. qualifying public signal — event pages, job posts, procurement pages, vendor pages, menus, calendars, social/event pages, etc.;
+5. delivery — demo 10 rows or production 25 rows, BigSet link only or export/email.
+
+Then the agent creates the BigSet prompt using the expected structure:
+
+```text
+Create a dataset of <10 or 25> <target rows> for <business/user/context>.
+
+Goal:
+<business action this dataset should drive>
+
+Scope:
+<geography, industry, source types, constraints>
+
+Only include rows with public evidence that <qualification signal>.
+
+Columns:
+- <primary_name>
+- website
+- category / industry / type
+- location / geography, if relevant
+- <signal column>
+- signal_type
+- source_url
+- signal_date_or_event_date_if_available
+- likely_use_case
+- confidence_score or outreach_priority_score
+- why_it_matters / why_good_fit
+- first_outreach_note, if sales-oriented
+
+Rules:
+- Return <10 or 25> rows.
+- Every row must include a source_url.
+- Use public organization/business information only.
+- Do not scrape personal emails, private phone numbers, or individual staff contact details.
+- Skip rows where the qualifying signal cannot be verified from a public source.
+- Scores should be 1-100.
+- Keep explanations short and practical.
+```
+
+This avoids prompt drift and produces more useful, source-verifiable datasets than generic one-line prompts.
+
 ## Execution modes
 
 | Mode | LLM provider | Web/search provider | Use when |
@@ -168,6 +232,33 @@ Expected behavior:
 - rows appear live in the table;
 - CSV/XLSX export works.
 
+
+## Export and email a completed dataset report
+
+The app UI exports CSV/XLSX. The repo also includes a public, scriptable report flow for client-ready delivery:
+
+```bash
+# Replace with a live dataset id from http://localhost:3500/dataset/<id>
+node scripts/with-root-env.mjs node scripts/export-dataset-report.mjs \
+  --dataset-id <dataset_id> \
+  --title "Client-ready BigSet report" \
+  --out-dir artifacts/dataset-reports/<dataset_id>
+
+# Optional: email the generated PDF with your own SMTP credentials.
+SMTP_HOST=smtp.example.com \
+SMTP_PORT=587 \
+SMTP_USER=you@example.com \
+SMTP_PASSWORD=app-password-or-secret \
+EMAIL_FROM="BigSet <you@example.com>" \
+EMAIL_TO=client@example.com \
+EMAIL_SUBJECT="Your BigSet dataset report" \
+EMAIL_ATTACHMENT=artifacts/dataset-reports/<dataset_id>/report.pdf \
+python3 scripts/send-dataset-report.py
+```
+
+This is intentionally externalized into scripts rather than hardcoded into the app: BigSet should never store your ChatGPT/Codex OAuth token or your mail password. Use app passwords, SMTP relay credentials, or your own transactional email provider.
+
+
 ## Original OpenRouter + TinyFish mode
 
 Leave `LLM_PROVIDER_MODE` unset or set it to `openrouter`, then provide TinyFish and OpenRouter credentials through setup or `.env`.
@@ -189,9 +280,12 @@ OPENROUTER_API_KEY=...
 | `HERMES_CHAT_TIMEOUT_MS` | `180000` | Timeout for schema/non-web Hermes calls. |
 | `HERMES_DISCOVERY_TIMEOUT_MS` | `120000` | Timeout for fast candidate-discovery calls. |
 | `HERMES_RESEARCH_TIMEOUT_MS` | `480000` | Timeout for per-entity research and refresh calls. |
-| `HERMES_MAX_ROWS` | `10` | Safety cap for local Hermes populate runs. Explicit leading prompt counts below this cap are respected. |
-| `HERMES_MAX_CANDIDATES_PER_ROUND` | `8` | Safety cap for discovery candidates per round. |
+| `HERMES_MAX_ROWS` | `25` | Overall safety cap for local Hermes populate runs. Prompt counts such as `25 companies` are respected up to this cap. |
+| `HERMES_BATCH_MAX_ROWS` | `10` | Per-batch row target. Larger runs are split into bounded batches instead of one large agentic wave. |
+| `HERMES_MAX_CANDIDATES_PER_ROUND` | `15` | Safety cap for discovery candidates per bounded batch. |
 | `HERMES_MAX_CONCURRENT` | `2` | Parallel per-entity Hermes research calls. Increase cautiously. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | empty | Optional SMTP credentials for sending generated dataset reports to yourself or clients. |
+| `EMAIL_FROM`, `EMAIL_TO`, `EMAIL_SUBJECT`, `EMAIL_ATTACHMENT` | empty | Optional report-delivery values used by `scripts/send-dataset-report.py`. |
 | `CONVEX_SELF_HOSTED_ADMIN_KEY` | auto | Generated by `make dev` for local self-hosted Convex. |
 | `LOCAL_KEYCHAIN_PORT`, `LOCAL_KEYCHAIN_TOKEN`, `BIGSET_LOCAL_WORKSPACE_ID` | auto | Generated by `make dev` for the local keychain bridge. |
 
@@ -270,7 +364,8 @@ bigset-oauth/
 │   ├── src/mastra/           Original workflows/agents/tools and Hermes branch points
 │   ├── src/email/            Optional dataset-ready email
 │   └── src/analytics/        Optional PostHog wrapper
-├── scripts/                  Build/release and verification helpers
+├── scripts/                  Build/release, verification, report export, and optional SMTP send helpers
+├── artifacts/                Public explainer/video artifacts
 ├── makefiles/                Local Docker workflow
 ├── HERMES_MODE.md            Operator guide for Hermes/Codex mode
 ├── IMPLEMENTATION_NOTES.md   Code-level notes on what was replaced
@@ -286,7 +381,12 @@ cd ../frontend && npm run build
 bash scripts/verify-authz.sh
 ```
 
-Also run a small Hermes-mode populate test and verify rows appear in the UI.
+Also run a small Hermes-mode populate test and verify rows appear in the UI. For public video/report changes, verify the HyperFrames artifact and generated report paths too:
+
+```bash
+cd artifacts/bigset-hermes-x-video && npm run check
+node scripts/with-root-env.mjs node scripts/export-dataset-report.mjs --dataset-id <live_dataset_id> --out-dir /tmp/bigset-report-test
+```
 
 ## License
 

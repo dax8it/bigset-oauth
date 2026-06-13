@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: #05070b; }
+      body { font-family: "Inter", "SF Pro Display", "Helvetica Neue", Arial, sans-serif; color: #f8fafc; }
+      .mono { font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace; }
+      #root { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: radial-gradient(circle at 16% 18%, rgba(94,234,212,.18), transparent 30%), radial-gradient(circle at 84% 14%, rgba(167,139,250,.18), transparent 34%), linear-gradient(135deg, #05070b 0%, #08111f 55%, #05070b 100%); }
+      .grid { position:absolute; inset:-2px; background-image: linear-gradient(rgba(148,163,184,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,.08) 1px, transparent 1px); background-size: 64px 64px; mask-image: radial-gradient(circle at center, black 0%, black 58%, transparent 88%); opacity:.68; }
+      .scan { position:absolute; inset:0; background: linear-gradient(180deg, transparent, rgba(94,234,212,.10), transparent); height: 240px; opacity:.26; filter: blur(10px); }
+      .orb { position:absolute; width: 560px; height: 560px; border-radius: 999px; filter: blur(60px); opacity:.22; }
+      .orb.cyan { left:-160px; top:210px; background:#5eead4; }
+      .orb.violet { right:-180px; top:120px; background:#a78bfa; }
+      .scene { position:absolute; inset:0; padding:82px 112px 130px; display:flex; flex-direction:column; justify-content:center; gap:32px; opacity:0; visibility:hidden; }
+      .eyebrow { color:#5eead4; letter-spacing:.18em; text-transform:uppercase; font-size:24px; font-weight:800; }
+      h1 { font-size:108px; line-height:.94; letter-spacing:-.075em; max-width:1460px; font-weight:920; }
+      h2 { font-size:74px; line-height:1; letter-spacing:-.055em; max-width:1540px; font-weight:920; }
+      .sub { font-size:34px; line-height:1.18; color:#cbd5e1; max-width:1240px; font-weight:620; }
+      .accent { color:#5eead4; } .violet { color:#a78bfa; } .amber { color:#fbbf24; } .green { color:#22c55e; }
+      .row { display:flex; align-items:center; gap:28px; flex-wrap:wrap; }
+      .card { border:1px solid rgba(148,163,184,.20); background:rgba(8,17,31,.74); border-radius:28px; padding:28px; box-shadow:0 26px 80px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.06); backdrop-filter: blur(18px); }
+      .node { width:330px; min-height:138px; display:flex; flex-direction:column; justify-content:center; gap:10px; }
+      .node.wide { width:430px; }
+      .node .label { font-size:29px; font-weight:900; letter-spacing:-.03em; }
+      .node .small { font-size:20px; line-height:1.25; color:#94a3b8; }
+      .arrow { height:4px; width:118px; border-radius:10px; background:linear-gradient(90deg, rgba(94,234,212,.15), #5eead4, rgba(167,139,250,.70)); position:relative; box-shadow:0 0 20px rgba(94,234,212,.35); }
+      .arrow::after { content:""; position:absolute; right:-7px; top:-8px; width:20px; height:20px; border-top:4px solid #a78bfa; border-right:4px solid #a78bfa; transform:rotate(45deg); }
+      .pill { display:inline-flex; align-items:center; gap:10px; padding:13px 20px; border-radius:999px; background:rgba(94,234,212,.09); border:1px solid rgba(94,234,212,.28); color:#cffafe; font-weight:800; font-size:21px; }
+      .old-pill { background:rgba(251,191,36,.10); border-color:rgba(251,191,36,.28); color:#fde68a; }
+      .terminal { width: 980px; border-radius:30px; overflow:hidden; background:#020617; border:1px solid rgba(148,163,184,.22); box-shadow:0 28px 90px rgba(0,0,0,.48); }
+      .terminal.big { width: 1240px; }
+      .term-bar { height:54px; background:#0f172a; display:flex; align-items:center; padding:0 22px; gap:10px; }
+      .dot { width:15px; height:15px; border-radius:50%; background:#ef4444; box-shadow:24px 0 #f59e0b, 48px 0 #22c55e; }
+      .term-body { padding:30px 34px 34px; font-size:25px; line-height:1.55; color:#d1fae5; }
+      .cmd { color:#5eead4; } .comment { color:#9ca3af; }
+      .json-card { width:620px; min-height:382px; display:flex; flex-direction:column; justify-content:center; gap:8px; }
+      .json-line { font-size:24px; line-height:1.45; color:#dbeafe; }
+      .cap-grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:20px; width:1280px; }
+      .cap { min-height:132px; display:flex; flex-direction:column; justify-content:center; gap:10px; }
+      .cap strong { font-size:28px; letter-spacing:-.03em; } .cap span { color:#94a3b8; font-size:18px; line-height:1.25; }
+      .two-grid { display:grid; grid-template-columns: repeat(2, 1fr); gap:22px; width:1180px; }
+      .proof { min-height:152px; }
+      .logo { width:350px; height:auto; filter: drop-shadow(0 0 38px rgba(94,234,212,.18)); }
+      .caption { position:absolute; left:50%; bottom:54px; transform:translateX(-50%); width:1580px; min-height:92px; display:flex; align-items:center; justify-content:center; text-align:center; padding:18px 34px; border-radius:26px; background:rgba(2,6,23,.74); border:1px solid rgba(148,163,184,.22); box-shadow:0 18px 50px rgba(0,0,0,.45); backdrop-filter: blur(16px); font-size:31px; line-height:1.14; font-weight:850; letter-spacing:-.025em; }
+      .caption em { color:#5eead4; font-style:normal; }
+      .caption b { color:#fbbf24; }
+      .flow-line { position:absolute; height:4px; background:linear-gradient(90deg, transparent, #5eead4, #a78bfa, transparent); border-radius:99px; opacity:.7; filter:drop-shadow(0 0 12px rgba(94,234,212,.55)); }
+      .badge-stack { display:flex; gap:16px; flex-wrap:wrap; max-width:960px; }
+      .check { color:#22c55e; margin-right:10px; }
+      .repo-line { font-size:32px; color:#cbd5e1; letter-spacing:-.03em; }
+      .repo { color:#f8fafc; font-weight:900; }
+      .watermark { position:absolute; right:52px; top:42px; font-size:24px; font-weight:700; color:rgba(226,232,240,.88); letter-spacing:.08em; text-transform:uppercase; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="110" data-width="1920" data-height="1080">
+      <audio id="narration" src="assets/narration_updated_145.mp3" data-start="0" data-duration="108.2" data-track-index="0"></audio>
+      <div class="grid"></div><div class="scan"></div><div class="orb cyan"></div><div class="orb violet"></div><div class="watermark mono">Hermes Agent × BigSet</div>
+
+      <section id="s1" class="scene clip" data-start="0" data-duration="10" data-track-index="1">
+        <img class="logo" src="assets/bigset-logo.png" alt="BigSet" />
+        <div class="eyebrow mono">WHAT BIGSET IS</div>
+        <h1>Plain English <span class="accent">→</span><br/>live datasets</h1>
+        <div class="sub">Typed, source-backed tables that can refresh and export.</div>
+      </section>
+
+      <section id="s2" class="scene clip" data-start="10" data-duration="11" data-track-index="1">
+        <div class="eyebrow mono">WHAT YOU ASK FOR</div>
+        <h2>Leads, RFPs, jobs, competitors, products, events, market maps.</h2>
+        <div class="badge-stack">
+          <span class="pill mono">sales outreach</span><span class="pill mono">RFP/procurement</span><span class="pill mono">job signals</span><span class="pill mono">competitor intel</span><span class="pill mono">local business lists</span>
+        </div>
+      </section>
+
+      <section id="s3" class="scene clip" data-start="21" data-duration="13" data-track-index="1">
+        <div class="eyebrow mono">HERMES MODE</div>
+        <h2>One local agent endpoint replaces the provider chain.</h2>
+        <div class="row">
+          <div class="card node"><div class="label">BigSet</div><div class="small">schema, rows, Convex, UI</div></div>
+          <div class="arrow"></div>
+          <div class="card node wide"><div class="label accent">Hermes Agent API</div><div class="small">OpenAI-compatible /v1/chat/completions</div></div>
+          <div class="arrow"></div>
+          <div class="card node"><div class="label violet">Codex OAuth</div><div class="small">model + web tools owned by Hermes</div></div>
+        </div>
+      </section>
+
+      <section id="s4" class="scene clip" data-start="34" data-duration="13" data-track-index="1">
+        <div class="eyebrow mono">SECURITY BOUNDARY</div>
+        <h2>Hermes researches. <span class="accent">BigSet writes.</span></h2>
+        <div class="row">
+          <div class="terminal">
+            <div class="term-bar"><div class="dot"></div></div>
+            <div class="term-body mono">
+              <div><span class="cmd">Hermes</span> → strict JSON rows + sources</div>
+              <div><span class="comment"># no raw database write tool to the model</span></div>
+              <div><span class="cmd">BigSet</span> → Zod validation</div>
+              <div><span class="cmd">BigSet</span> → Convex insert/update</div>
+            </div>
+          </div>
+          <div class="card json-card">
+            <div class="json-line mono"><span class="check">✓</span> OAuth stays in Hermes</div>
+            <div class="json-line mono"><span class="check">✓</span> strict JSON contracts</div>
+            <div class="json-line mono"><span class="check">✓</span> ownership checks</div>
+            <div class="json-line mono"><span class="check">✓</span> source provenance</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="s5" class="scene clip" data-start="47" data-duration="12" data-track-index="1">
+        <div class="eyebrow mono">BIGSET SKILL WORKFLOW</div>
+        <h2>Discovery questions before dataset creation.</h2>
+        <div class="cap-grid">
+          <div class="card cap"><strong>Goal</strong><span>What action should this drive?</span></div>
+          <div class="card cap"><strong>Row type</strong><span>Companies, jobs, RFPs, products, events.</span></div>
+          <div class="card cap"><strong>Scope</strong><span>Geography, industry, audience.</span></div>
+          <div class="card cap"><strong>Evidence</strong><span>Public signal that qualifies a row.</span></div>
+          <div class="card cap"><strong>Delivery</strong><span>Link, export, PDF, email.</span></div>
+          <div class="card cap"><strong>No drift</strong><span>Bounded prompt; useful columns.</span></div>
+        </div>
+      </section>
+
+      <section id="s6" class="scene clip" data-start="59" data-duration="12" data-track-index="1">
+        <div class="eyebrow mono">PRODUCTION DISCIPLINE</div>
+        <h2>Bounded, source-verifiable, privacy-aware.</h2>
+        <div class="row">
+          <div class="card node wide"><div class="label amber">10 demo rows</div><div class="small">fast smoke tests and client previews</div></div>
+          <div class="card node wide"><div class="label accent">25 production rows</div><div class="small">batched: 10 rows at a time, 15 candidates per round</div></div>
+          <div class="card node wide"><div class="label green">source_url required</div><div class="small">no private contact scraping</div></div>
+        </div>
+      </section>
+
+      <section id="s7" class="scene clip" data-start="71" data-duration="12" data-track-index="1">
+        <div class="eyebrow mono">FULL LOOP PROVEN</div>
+        <h2>AI services outreach dataset.</h2>
+        <div class="two-grid">
+          <div class="card proof"><div class="json-line mono"><span class="check">✓</span> 25 live rows</div><div class="sub">Creative-services prospects with AI buying-intent signals.</div></div>
+          <div class="card proof"><div class="json-line mono"><span class="check">✓</span> source URLs</div><div class="sub">Job posts, RFP/procurement pages, public opportunity evidence.</div></div>
+          <div class="card proof"><div class="json-line mono"><span class="check">✓</span> PDF report</div><div class="sub">Client-readable report generated from BigSet rows.</div></div>
+          <div class="card proof"><div class="json-line mono"><span class="check">✓</span> email delivery</div><div class="sub">Sent to yourself or a client through SMTP.</div></div>
+        </div>
+      </section>
+
+      <section id="s8" class="scene clip" data-start="83" data-duration="12" data-track-index="1">
+        <div class="eyebrow mono">DELIVERY OPTIONS</div>
+        <h2>Use the UI, or automate reports.</h2>
+        <div class="row">
+          <div class="card node wide"><div class="label">BigSet link</div><div class="small">share or inspect the live table</div></div>
+          <div class="card node wide"><div class="label">CSV / XLSX</div><div class="small">export directly from the UI</div></div>
+          <div class="card node wide"><div class="label accent">HTML / PDF</div><div class="small">scripts/export-dataset-report.mjs</div></div>
+          <div class="card node wide"><div class="label violet">SMTP email</div><div class="small">scripts/send-dataset-report.py</div></div>
+        </div>
+      </section>
+
+      <section id="s9" class="scene clip" data-start="95" data-duration="9" data-track-index="1">
+        <div class="eyebrow mono">REPRODUCIBLE SETUP</div>
+        <h2>Clone, configure Hermes, run BigSet.</h2>
+        <div class="terminal big">
+          <div class="term-bar"><div class="dot"></div></div>
+          <div class="term-body mono">
+            <div><span class="cmd">hermes auth add openai-codex --type oauth</span></div>
+            <div><span class="cmd">API_SERVER_ENABLED=true</span> <span class="comment"># Hermes profile env</span></div>
+            <div><span class="cmd">LLM_PROVIDER_MODE=hermes</span></div>
+            <div><span class="cmd">HERMES_BASE_URL=http://host.docker.internal:8642/v1</span></div>
+            <div><span class="cmd">make dev</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="s10" class="scene clip" data-start="104" data-duration="6" data-track-index="1">
+        <div class="eyebrow mono">THE PATTERN</div>
+        <h2>Hermes handles intelligence.<br/>BigSet owns state and delivery.</h2>
+        <div class="repo-line">Public repo: <span class="repo mono">dax8it/bigset-oauth</span></div>
+      </section>
+
+      <div id="caption" class="caption"></div>
+      <div class="flow-line" style="left:160px; top:240px; width:500px"></div>
+      <div class="flow-line" style="right:210px; bottom:240px; width:620px"></div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      const scenes = ["#s1", "#s2", "#s3", "#s4", "#s5", "#s6", "#s7", "#s8", "#s9", "#s10"];
+      const starts = [0, 10, 21, 34, 47, 59, 71, 83, 95, 104];
+      const durations = [10, 11, 13, 13, 12, 12, 12, 12, 9, 6];
+      function fromIf(selector, vars, at) { if (document.querySelector(selector)) tl.from(selector, vars, at); }
+      scenes.forEach((selector, i) => {
+        const start = starts[i];
+        const dur = durations[i];
+        tl.set(selector, { autoAlpha: 1, y: 0, filter: "blur(0px)" }, start);
+        fromIf(selector + " .eyebrow", { y: 18, opacity: 0, duration: .55, ease: "power3.out", overwrite: "auto" }, start + .12);
+        fromIf(selector + " h1, " + selector + " h2", { y: 46, opacity: 0, duration: .75, ease: "power3.out", overwrite: "auto" }, start + .25);
+        fromIf(selector + " .sub, " + selector + " .repo-line", { y: 28, opacity: 0, duration: .65, ease: "power3.out", overwrite: "auto" }, start + .72);
+        fromIf(selector + " .card, " + selector + " .terminal, " + selector + " .pill, " + selector + " .logo", { y: 46, opacity: 0, scale: .96, duration: .7, stagger: .08, ease: "power3.out", overwrite: "auto" }, start + .95);
+        fromIf(selector + " .arrow", { scaleX: 0, opacity: 0, duration: .55, stagger: .16, transformOrigin: "left center", ease: "power2.out", overwrite: "auto" }, start + 1.15);
+        if (i < scenes.length - 1) {
+          tl.to(selector, { autoAlpha: 0, y: -24, filter: "blur(10px)", duration: .52, ease: "power2.inOut", overwrite: "auto" }, start + dur - .56);
+        } else {
+          tl.to(selector, { autoAlpha: 0, duration: .7, ease: "power2.inOut", overwrite: "auto" }, 109.1);
+        }
+      });
+      tl.to(".scan", { y: 940, duration: 5.8, repeat: 19, ease: "none" }, 0);
+      tl.to(".grid", { x: -64, y: -64, duration: 18, repeat: 7, ease: "none" }, 0);
+      tl.to(".flow-line", { x: 130, opacity: .15, duration: 2.6, repeat: 43, yoyo: true, ease: "sine.inOut", stagger: .45 }, 0);
+      tl.to(".orb.cyan", { x: 120, y: -80, duration: 10, repeat: 11, yoyo: true, ease: "sine.inOut" }, 0);
+      tl.to(".orb.violet", { x: -100, y: 95, duration: 12, repeat: 9, yoyo: true, ease: "sine.inOut" }, 0);
+
+      const captions = [
+        [0.2, 8.6, "BigSet turns plain English into a <em>live, refreshable dataset</em> with source-backed rows."],
+        [8.6, 20.6, "Ask for leads, RFPs, job signals, competitors, products, events, or market research."],
+        [20.6, 33.5, "In this repo, BigSet calls one local <em>Hermes Agent API server</em> instead of the old provider chain."],
+        [33.5, 46.6, "Hermes researches and returns strict JSON. <b>BigSet validates and writes.</b>"],
+        [46.6, 58.7, "The BigSet skill locks goal, row type, scope, public evidence, and delivery before populate starts."],
+        [58.7, 70.7, "Ten rows for demo, twenty-five for production, every row source-backed, no private contact scraping."],
+        [70.7, 82.8, "We proved it: AI services outreach → 25 rows → source URLs → PDF report → email delivery."],
+        [82.8, 94.8, "Share a BigSet link, export CSV/XLSX, or render HTML/PDF and send through your own SMTP."],
+        [94.8, 104.2, "Install Hermes, add Codex OAuth, enable the API server, set Hermes mode, then run make dev."],
+        [104.2, 109.4, "Hermes handles intelligence. BigSet owns state, auth, refresh, export, and delivery."]
+      ];
+      const caption = document.querySelector("#caption");
+      captions.forEach(([start, end, html]) => {
+        tl.call(() => { caption.innerHTML = html; }, [], start);
+        tl.fromTo(caption, { autoAlpha: 0, y: 18 }, { autoAlpha: 1, y: 0, duration: .28, ease: "power2.out", overwrite: "auto" }, start);
+        tl.to(caption, { autoAlpha: 0, y: -10, duration: .24, ease: "power2.in", overwrite: "auto" }, end - .25);
+        tl.set(caption, { opacity: 0, visibility: "hidden" }, end);
+      });
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

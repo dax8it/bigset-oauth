@@ -20,7 +20,9 @@ Hard constraints:
 4. Do not pass BigSet row-write tools to Hermes. Hermes returns strict JSON; BigSet writes rows itself.
 5. Preserve the authorization model in `buildPopulateTools()` and Convex expected-dataset checks.
 6. Keep Hermes populate bounded: row caps, candidate caps, discovery timeout, research timeout, and modest concurrency.
-7. If editing Convex functions under `frontend/convex/`, run or document `make convex-push`.
+7. Preserve the agent-led BigSet skill workflow for dataset creation: discovery interview → expected prompt structure → bounded source-verifiable dataset → link/export/email delivery if requested.
+8. Keep client-ready delivery scripts public and credential-free: `scripts/export-dataset-report.mjs` may read local CLI endpoints; `scripts/send-dataset-report.py` must use env vars for SMTP only.
+9. If editing Convex functions under `frontend/convex/`, run or document `make convex-push`.
 
 Read first:
 

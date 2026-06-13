@@ -61,12 +61,13 @@ export const env = {
   // Concurrent per-entity research calls during a populate run. A single
   // hermes gateway handles concurrent requests, but keep this modest.
   HERMES_MAX_CONCURRENT: numberFromEnv("HERMES_MAX_CONCURRENT", 2),
-  // Local Hermes runs are bounded so one Codex OAuth agent call does not try
-  // to plan a 100-row crawl inside a single HTTP request.
-  HERMES_MAX_ROWS: numberFromEnv("HERMES_MAX_ROWS", 10),
+  // Overall local cap for a populate run. Larger runs are split into
+  // bounded batches so no single discovery/investigation wave gets too big.
+  HERMES_MAX_ROWS: numberFromEnv("HERMES_MAX_ROWS", 25),
+  HERMES_BATCH_MAX_ROWS: numberFromEnv("HERMES_BATCH_MAX_ROWS", 10),
   HERMES_MAX_CANDIDATES_PER_ROUND: numberFromEnv(
     "HERMES_MAX_CANDIDATES_PER_ROUND",
-    8,
+    15,
   ),
   CLIENT_ORIGIN: process.env.CLIENT_ORIGIN || "http://localhost:3500",
   CONVEX_URL: required("CONVEX_URL"),

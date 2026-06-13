@@ -1,0 +1,11 @@
+{
+  "name": "bigset-hermes-x-video",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes hyperframes@0.6.96 preview",
+    "check": "npx --yes hyperframes@0.6.96 lint && npx --yes hyperframes@0.6.96 validate && npx --yes hyperframes@0.6.96 inspect",
+    "render": "npx --yes hyperframes@0.6.96 render",
+    "publish": "npx --yes hyperframes@0.6.96 publish"
+  }
+}
