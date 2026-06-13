@@ -1,51 +1,106 @@
 # BigSet
 
-Monorepo: `frontend/` (Next.js 16) + `backend/` (Fastify + Mastra). Run with `make dev` (Docker).
+Monorepo: `frontend/` (Next.js 16) + `backend/` (Fastify + Mastra). Run with `make dev` from the repo root.
 
-Frontend on :3500, backend on :3501, Mastra Studio on :4111, Convex dashboard on :6791.
+Default local URLs:
+
+- Frontend: http://localhost:3500
+- Backend: http://localhost:3501
+- Mastra Studio: http://localhost:4111
+- Convex dashboard: http://localhost:6791
 
 ## Setup
 
-1. Copy `.env.example` to `.env` and fill in your keys:
-   - `TINYFISH_API_KEY` — from https://agent.tinyfish.ai/api-keys?utm_source=github&utm_medium=organic&utm_campaign=bigset-developer-2026q2
-   - `OPENROUTER_API_KEY` — from https://openrouter.ai/settings/keys
-   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` — from Clerk API Keys
-   - `CLERK_SECRET_KEY` — from Clerk API Keys
-   - `CLERK_JWT_ISSUER_DOMAIN` — your Frontend API URL (e.g. `https://your-app.clerk.accounts.dev`)
-2. Create a free Clerk account at https://clerk.com and create an application.
-3. In the Clerk dashboard, go to **JWT Templates** and enable the **Convex** template.
-4. Run `make dev` — starts all Docker services, auto-generates the Convex admin key on first run, and pushes Convex functions. No manual key generation needed.
+1. Copy `.env.example` to `.env`.
+2. Choose a provider mode:
+   - `LLM_PROVIDER_MODE=hermes` for local Hermes Agent + Codex OAuth.
+   - `LLM_PROVIDER_MODE=openrouter` for the original OpenRouter + TinyFish path.
+3. Run `make dev`.
+
+`make dev` starts all Docker services, auto-generates the Convex admin key on first run, and pushes Convex functions.
+
+## Provider modes
+
+### Hermes mode
+
+Hermes mode replaces both external paid services:
+
+- OpenRouter -> Hermes Agent configured with `openai-codex` / ChatGPT OAuth.
+- TinyFish search/fetch -> Hermes Agent web tools.
+
+Minimum `.env`:
+
+```bash
+LLM_PROVIDER_MODE=hermes
+HERMES_BASE_URL=http://host.docker.internal:8642/v1
+HERMES_API_KEY=replace-this-local-secret
+HERMES_MODEL=hermes-agent
+```
+
+The host-side Hermes profile must have its API server enabled and `API_SERVER_KEY` must match `HERMES_API_KEY`.
+
+Hermes is an agent endpoint. BigSet sends strict-JSON requests and writes rows itself; do not pass Mastra write tools to Hermes.
+
+### OpenRouter + TinyFish mode
+
+Original path:
+
+```bash
+LLM_PROVIDER_MODE=openrouter
+OPENROUTER_API_KEY=...
+TINYFISH_API_KEY=...
+```
 
 ## Architecture
 
-Auth is Clerk. Frontend uses `@clerk/nextjs` with `ClerkProvider` wrapping the app. Convex validates Clerk JWTs via `convex/auth.config.ts`. Protected routes enforced by Clerk proxy (`frontend/proxy.ts`). No self-hosted auth database.
+Auth is Clerk in production. Local mode can run without Clerk when `PROD` is unset. Frontend uses `@clerk/nextjs` with `ClerkProvider`; Convex validates Clerk JWTs via `convex/auth.config.ts`; protected routes are enforced by Clerk proxy (`frontend/proxy.ts`).
 
-Dataset storage uses Convex (self-hosted at :3210). Schema in `frontend/convex/schema.ts`, functions in `frontend/convex/datasets.ts` and `frontend/convex/datasetRows.ts`. Convex dashboard at :6791.
+Dataset storage uses self-hosted Convex. Schema is in `frontend/convex/schema.ts`; functions are in `frontend/convex/datasets.ts`, `frontend/convex/datasetRows.ts`, and related files.
 
-Frontend uses Convex React hooks (`useQuery`, `useMutation`) with `ConvexProviderWithClerk` for authenticated realtime queries. Use `useConvexAuth()` (not Clerk's `useAuth()`) to check auth state in components. For backend calls, the frontend uses `useAuth().getToken()` from `@clerk/nextjs` to get a Bearer token and passes it to the API client in `frontend/lib/backend.ts`.
+Frontend uses Convex React hooks (`useQuery`, `useMutation`) with `ConvexProviderWithClerk` for authenticated realtime queries. Backend calls use a Bearer token from `frontend/lib/backend.ts`.
 
-Backend is Fastify + Mastra. Fastify serves the HTTP API (Clerk JWT auth on protected routes via `backend/src/clerk-auth.ts`). Mastra (`backend/src/mastra/`) is the workflow orchestration layer — it wraps pipelines into inspectable workflows with a Studio UI. Both run as separate Docker services sharing the same source code.
+Backend is Fastify + Mastra. Fastify serves the HTTP API. Mastra wraps populate/update workflows into inspectable workflows with a Studio UI. Backend and Mastra run as separate Docker services sharing the same source code.
 
-The schema inference pipeline: frontend calls `POST /infer-schema` → Fastify verifies the Clerk JWT → calls `inferSchema()` in `backend/src/pipeline/schema-inference.ts` → Claude Sonnet 4.6 via OpenRouter → returns a Zod-validated `DatasetSchema` → frontend maps it to editable columns in the wizard.
+Schema inference:
 
-The populate pipeline: frontend calls `POST /populate` with `{ datasetId, datasetName, description, columns }` → Fastify verifies the Clerk JWT → triggers `populateWorkflow` which: (1) clears existing rows, (2) builds a prompt from the schema, (3) runs the populate agent (Claude Sonnet 4.6) which searches the web via TinyFish APIs, then inserts rows into Convex one by one. Rows appear in realtime on the frontend via Convex reactive queries.
+- OpenRouter mode: AI SDK structured output via OpenRouter.
+- Hermes mode: strict JSON via `backend/src/hermes/client.ts`, validated with the same Zod schema.
 
-Convex functions use `ctx.auth.getUserIdentity()` to get the authenticated user. The `ownerId` field on datasets stores `identity.subject` (Clerk user ID). Do not pass `ownerId` from the client.
+Populate:
 
-## Environment Variables
+- OpenRouter mode: original Mastra agent path with TinyFish web tools.
+- Hermes mode: bounded deterministic orchestration in `backend/src/hermes/populate-run.ts`; Hermes returns entity/row JSON; BigSet inserts rows.
 
-Root `.env` is the only local env file. Docker Compose, package scripts, and Convex CLI helper targets all read it. Key variables:
-- `TINYFISH_API_KEY` — used by the populate agent for web search and fetch (get one at https://agent.tinyfish.ai/api-keys?utm_source=github&utm_medium=organic&utm_campaign=bigset-developer-2026q2)
-- `OPENROUTER_API_KEY` — used by backend and Mastra for AI model calls
-- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` — shared by frontend and backend
-- `CONVEX_SELF_HOSTED_ADMIN_KEY` — used by backend for system-level Convex writes
+Refresh:
 
-The backend container maps `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` → `CLERK_PUBLISHABLE_KEY` (see `docker-compose.dev.yml`).
+- OpenRouter mode: original refresh agent.
+- Hermes mode: Hermes verifies row changes; BigSet applies updates through closure-scoped `update_row`.
 
-## Convex Deploys
+Convex functions use `ctx.auth.getUserIdentity()` to get the authenticated user. The `ownerId` field stores `identity.subject`. Do not pass `ownerId` from the client.
 
-Convex is self-hosted — it does NOT hot-reload when you edit files in `frontend/convex/`. After changing any Convex function, schema, or auth config, you must run `make convex-push` to deploy the updated code to the running instance. `make dev` does this automatically on startup, but subsequent edits require a manual push.
+## Environment variables
 
-In CI/prod, run `npx convex deploy` with `CONVEX_SELF_HOSTED_URL` and `CONVEX_SELF_HOSTED_ADMIN_KEY` set as env vars.
+Root `.env` is the only local env file. Docker Compose, package scripts, and Convex CLI helper targets all read it.
 
-This is an open-source (AGPL) project. Do not commit secrets, API keys, or internal docs.
+Key variables:
+
+- `LLM_PROVIDER_MODE` — `hermes` or `openrouter`.
+- `HERMES_BASE_URL`, `HERMES_API_KEY`, `HERMES_MODEL` — Hermes mode.
+- `OPENROUTER_API_KEY`, `TINYFISH_API_KEY` — original mode.
+- `CONVEX_SELF_HOSTED_ADMIN_KEY` — auto-generated by `make dev` if blank.
+- `LOCAL_KEYCHAIN_PORT`, `LOCAL_KEYCHAIN_TOKEN`, `BIGSET_LOCAL_WORKSPACE_ID` — auto-generated by `make dev` if blank.
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_JWT_ISSUER_DOMAIN` — production auth.
+
+The backend container maps `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` to `CLERK_PUBLISHABLE_KEY` in `docker-compose.dev.yml`.
+
+## Convex deploys
+
+Convex is self-hosted and does not hot-reload when files under `frontend/convex/` change. After changing a Convex function, schema, or auth config, run:
+
+```bash
+make convex-push
+```
+
+In CI/prod, run `npx convex deploy` with `CONVEX_URL` and `CONVEX_SELF_HOSTED_ADMIN_KEY` set.
+
+This is an open-source AGPL project. Do not commit secrets, real API keys, OAuth tokens, or internal-only local paths.

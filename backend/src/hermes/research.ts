@@ -83,10 +83,12 @@ export async function discoverEntities(args: DiscoveryArgs): Promise<DiscoveryRe
       : "";
 
   const sourceBlock = args.sourceHint
-    ? `\nLikely authoritative source (start here — it may list many entities at once): ${args.sourceHint}`
+    ? `\nOptional source hint (use only if it is clearly reachable from search results; do not fetch/retry it blindly): ${args.sourceHint}`
     : "";
 
-  const prompt = `You are doing breadth-first discovery for a dataset. Use your web tools (web_search, web_extract) to find REAL entities that belong in it. Do not invent entities.
+  const prompt = `You are doing fast candidate discovery for a dataset. This step only needs leads; each candidate is verified in a later per-entity investigation.
+
+Do NOT use web_extract or browser in this discovery step. Use at most one targeted web_search if needed, otherwise use widely-known candidate leads from the dataset description. Do not retry broken source hints. Return quickly.
 
 Dataset: ${args.datasetName}
 Description: ${args.description}
@@ -97,7 +99,7 @@ ${columnsBlock(args.columns)}
 Primary key column(s): ${pkNames.map((n) => `"${n}"`).join(", ")}
 ${sourceBlock}${excludeBlock}
 
-Find up to ${args.count} distinct entities. For each, return the primary key value(s) you verified, a one-line context of what you already learned, and any URLs that likely contain the rest of the row's data.
+Find up to ${args.count} distinct candidate entities. For each, return plausible primary key value(s), a one-line context, and URLs only if you already know likely official/Wikipedia/project pages. Leave urls empty rather than searching exhaustively.
 
 Output JSON of this exact shape:
 {
@@ -112,7 +114,7 @@ Output JSON of this exact shape:
 ${JSON_ONLY}`;
 
   const { value, usage } = await hermesJsonChat(prompt, discoverySchema, {
-    timeoutMs: env.HERMES_RESEARCH_TIMEOUT_MS,
+    timeoutMs: env.HERMES_DISCOVERY_TIMEOUT_MS,
     abortSignal: args.abortSignal,
     sessionId: args.sessionId,
   });
@@ -157,7 +159,7 @@ export async function investigateEntity(args: InvestigateArgs): Promise<Investig
       ? `\nUseful URLs to start from:\n${args.entity.urls.map((u) => `- ${u}`).join("\n")}`
       : "";
 
-  const prompt = `Research ONE entity for the dataset "${args.datasetName}" (${args.description}) and report the row data. Use your web tools (web_search, web_extract) to verify facts from real pages. Be efficient — a handful of lookups, not an exhaustive crawl.
+  const prompt = `Research ONE entity for the dataset "${args.datasetName}" (${args.description}) and report the row data. Use your web tools (web_search, web_extract) to verify facts from real pages. Be efficient — a handful of lookups, not an exhaustive crawl. If a page is blocked, huge, or fails extraction, use another source rather than retrying.
 
 Columns to fill:
 ${columnsBlock(args.columns)}

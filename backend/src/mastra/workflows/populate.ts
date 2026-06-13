@@ -122,7 +122,10 @@ Respond with EXACTLY one word: scraper or search`;
         ...inputData,
         enumerationStrategy: classification,
         manifest: [],
-        sourceUrl: sourceHint || undefined,
+        // In Hermes mode, discovery is an agentic search step. Do not pin it
+        // to schema-inferred source hints: those are often guessed directory
+        // URLs, and one dead page can stall the whole Hermes call.
+        sourceUrl: undefined,
       };
     }
     try {

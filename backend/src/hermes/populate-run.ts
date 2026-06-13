@@ -29,7 +29,13 @@ import {
 } from "./research.js";
 
 const MAX_DISCOVERY_ROUNDS = 5;
-const MAX_CANDIDATES_PER_ROUND = 40;
+
+function explicitLeadingRowCount(text: string): number | null {
+  const match = text.trim().match(/^(\d{1,2})\b/);
+  if (!match) return null;
+  const count = Number(match[1]);
+  return Number.isFinite(count) && count > 0 ? count : null;
+}
 
 export interface HermesPopulateArgs {
   authorizedDatasetId: string;
@@ -62,10 +68,16 @@ export async function runHermesPopulate(args: HermesPopulateArgs): Promise<strin
     datasetName,
     description,
     columns,
-    maxRowCount,
     sourceHint,
     metrics,
   } = args;
+
+  const requestedCount = explicitLeadingRowCount(description);
+  const maxRowCount = Math.min(
+    args.maxRowCount,
+    requestedCount ?? args.maxRowCount,
+    env.HERMES_MAX_ROWS,
+  );
 
   const tools = buildPopulateTools(authorizedDatasetId, authContext);
   const signal = getSignal(authorizedDatasetId);
@@ -94,7 +106,10 @@ export async function runHermesPopulate(args: HermesPopulateArgs): Promise<strin
     const remaining = maxRowCount - rowCount;
     if (remaining <= 0 || quotaHit) break;
 
-    const want = Math.min(Math.ceil(remaining * 1.5) + 2, MAX_CANDIDATES_PER_ROUND);
+    const want = Math.min(
+      Math.ceil(remaining * 1.5) + 2,
+      env.HERMES_MAX_CANDIDATES_PER_ROUND,
+    );
     console.log(
       `[hermes-populate] ${logCtx} round=${round + 1} rows=${rowCount}/${maxRowCount} discovering=${want}`,
     );
