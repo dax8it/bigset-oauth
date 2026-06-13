@@ -3,7 +3,10 @@ import { z } from "zod";
 import { datasetContextSchema, populateColumnSchema } from "../../pipeline/populate.js";
 import { convex, internal } from "../../convex.js";
 import { buildRefreshAgent } from "../agents/refresh.js";
+import { buildPopulateTools } from "../tools/dataset-tools.js";
 import { authContextSchema } from "./populate.js";
+import { env } from "../../env.js";
+import { refreshRow as hermesRefreshRow } from "../../hermes/research.js";
 import { requireOpenRouterApiKey } from "../../local-credentials.js";
 import { RunMetrics } from "../run-metrics.js";
 import { saveRunMetrics } from "../save-run-metrics.js";
@@ -94,18 +97,67 @@ const refreshRowsStep = createStep({
   inputSchema: markAndFetchOutputSchema,
   outputSchema: refreshOutputSchema,
   execute: async ({ inputData }) => {
-    const { datasetId, columns, authContext, rows } = inputData;
+    const { datasetId, datasetName, columns, authContext, rows } = inputData;
     let updatedCount = 0;
     let errors = 0;
 
     const metrics = new RunMetrics();
     const startedAt = Date.now();
-    const openRouterApiKey = await requireOpenRouterApiKey();
+    const openRouterApiKey = env.IS_HERMES_MODE ? "" : await requireOpenRouterApiKey();
+
+    // hermes mode: one closure-scoped tool set for the whole refresh run.
+    // hermes only returns data; BigSet applies changes via update_row so
+    // the dataset-id capability scoping is identical to openrouter mode.
+    const hermesTools = env.IS_HERMES_MODE
+      ? buildPopulateTools(datasetId, authContext)
+      : null;
 
     const pkColumns = columns.filter((c) => c.isPrimaryKey);
 
+    async function processHermesRow(row: z.infer<typeof rowSchema>) {
+      const abortSignal = getSignal(datasetId);
+      const { outcome, usage } = await hermesRefreshRow({
+        datasetName,
+        columns,
+        row,
+        abortSignal,
+        sessionId: `bigset-update-${authContext.workflowRunId}`,
+      });
+      metrics.addRefreshResult({ usage, steps: [] });
+
+      if (!outcome.updated || !outcome.data) {
+        console.log(`[refresh-rows] Row ${row._id}: updated=false (${outcome.changes || "no changes"})`);
+        return;
+      }
+
+      // Direct execute call (outside an agent run): input per the tool's
+      // schema, plus an empty ToolExecutionContext (all fields optional).
+      const result = (await hermesTools!.update_row.execute?.(
+        {
+          rowId: row._id,
+          data: outcome.data,
+          sources: outcome.sources,
+          row_summary: outcome.row_summary,
+          how_found: outcome.how_found,
+        } as never,
+        {} as never,
+      )) as { success: boolean; error?: string } | undefined;
+
+      if (result?.success) {
+        updatedCount++;
+        metrics.rowsUpdated++;
+        console.log(`[refresh-rows] Row ${row._id}: updated=true (${outcome.changes})`);
+      } else {
+        throw new Error(result?.error ?? "update_row returned no result");
+      }
+    }
+
     async function processRow(row: z.infer<typeof rowSchema>) {
       try {
+        if (env.IS_HERMES_MODE) {
+          await processHermesRow(row);
+          return;
+        }
         const agent = buildRefreshAgent(
           datasetId,
           authContext,

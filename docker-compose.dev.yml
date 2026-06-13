@@ -52,6 +52,20 @@ services:
       REFRESH_SCHEDULER_POLL_MS: ${REFRESH_SCHEDULER_POLL_MS:-60000}
       REFRESH_SCHEDULER_BATCH_SIZE: ${REFRESH_SCHEDULER_BATCH_SIZE:-5}
       REFRESH_SCHEDULER_STALE_AFTER_MS: ${REFRESH_SCHEDULER_STALE_AFTER_MS:-21600000}
+      # hermes mode — route all LLM + web research through a local
+      # hermes-agent API server (Codex GPT-5.5 via ChatGPT OAuth inside
+      # hermes). host.docker.internal reaches the host-side gateway.
+      LLM_PROVIDER_MODE: ${LLM_PROVIDER_MODE:-openrouter}
+      HERMES_BASE_URL: ${HERMES_BASE_URL:-http://host.docker.internal:8642/v1}
+      HERMES_API_KEY: ${HERMES_API_KEY:-}
+      HERMES_MODEL: ${HERMES_MODEL:-hermes-agent}
+      HERMES_RESEARCH_TIMEOUT_MS: ${HERMES_RESEARCH_TIMEOUT_MS:-480000}
+      HERMES_DISCOVERY_TIMEOUT_MS: ${HERMES_DISCOVERY_TIMEOUT_MS:-120000}
+      HERMES_CHAT_TIMEOUT_MS: ${HERMES_CHAT_TIMEOUT_MS:-180000}
+      HERMES_MAX_CONCURRENT: ${HERMES_MAX_CONCURRENT:-2}
+      HERMES_MAX_ROWS: ${HERMES_MAX_ROWS:-25}
+      HERMES_BATCH_MAX_ROWS: ${HERMES_BATCH_MAX_ROWS:-10}
+      HERMES_MAX_CANDIDATES_PER_ROUND: ${HERMES_MAX_CANDIDATES_PER_ROUND:-15}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -81,6 +95,18 @@ services:
       LOCAL_KEYCHAIN_URL: http://host.docker.internal:${LOCAL_KEYCHAIN_PORT:-3502}
       LOCAL_KEYCHAIN_TOKEN: ${LOCAL_KEYCHAIN_TOKEN:-}
       LOCAL_KEYCHAIN_TIMEOUT_MS: ${LOCAL_KEYCHAIN_TIMEOUT_MS:-5000}
+      # hermes mode — same wiring as the backend service above.
+      LLM_PROVIDER_MODE: ${LLM_PROVIDER_MODE:-openrouter}
+      HERMES_BASE_URL: ${HERMES_BASE_URL:-http://host.docker.internal:8642/v1}
+      HERMES_API_KEY: ${HERMES_API_KEY:-}
+      HERMES_MODEL: ${HERMES_MODEL:-hermes-agent}
+      HERMES_RESEARCH_TIMEOUT_MS: ${HERMES_RESEARCH_TIMEOUT_MS:-480000}
+      HERMES_DISCOVERY_TIMEOUT_MS: ${HERMES_DISCOVERY_TIMEOUT_MS:-120000}
+      HERMES_CHAT_TIMEOUT_MS: ${HERMES_CHAT_TIMEOUT_MS:-180000}
+      HERMES_MAX_CONCURRENT: ${HERMES_MAX_CONCURRENT:-2}
+      HERMES_MAX_ROWS: ${HERMES_MAX_ROWS:-25}
+      HERMES_BATCH_MAX_ROWS: ${HERMES_BATCH_MAX_ROWS:-10}
+      HERMES_MAX_CANDIDATES_PER_ROUND: ${HERMES_MAX_CANDIDATES_PER_ROUND:-15}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

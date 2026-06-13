@@ -3,325 +3,391 @@
 </p>
 
 <p align="center">
-  <strong>Build and maintain any dataset from the live web, that refreshes regularly</strong>
+  <strong>Build and refresh live-web datasets with local Hermes + Codex OAuth agents.</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/tinyfish-io/bigset/stargazers"><img src="https://img.shields.io/github/stars/tinyfish-io/bigset?style=flat" alt="GitHub Stars" /></a>
-  <a href="https://github.com/tinyfish-io/bigset/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License" /></a>
-  <a href="https://github.com/tinyfish-io/bigset/issues"><img src="https://img.shields.io/github/issues/tinyfish-io/bigset" alt="Issues" /></a>
-  <a href="https://x.com/Tiny_Fish"><img src="https://img.shields.io/twitter/follow/Tiny_Fish?style=flat" alt="Follow TinyFish" /></a>
+  <a href="https://github.com/dax8it/bigset-oauth/stargazers"><img src="https://img.shields.io/github/stars/dax8it/bigset-oauth?style=flat" alt="GitHub Stars" /></a>
+  <a href="https://github.com/dax8it/bigset-oauth/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License" /></a>
+  <a href="https://github.com/dax8it/bigset-oauth/issues"><img src="https://img.shields.io/github/issues/dax8it/bigset-oauth" alt="Issues" /></a>
 </p>
 
 ---
 
-> ⚠️ **BigSet is experimental.** It works, sometimes surprisingly well, but expect rough edges. We're building in the open and shipping fast. Things will break, improve, and change. [Issues](https://github.com/tinyfish-io/bigset/issues) and feedback are very welcome.
+BigSet turns a plain-English request into a structured dataset. This fork keeps the original BigSet OpenRouter + TinyFish path, and adds a local-first Hermes mode where one [Hermes Agent](https://hermes-agent.nousresearch.com) instance replaces both external AI/search services.
 
----
+Example prompt:
 
-## What Is BigSet?
+> 5 popular open-source database engines with license and first release year
 
-You type a sentence:
+BigSet infers a schema, researches public web sources, writes verified rows into Convex, and exports CSV/XLSX. Datasets can be refreshed on a schedule.
 
-> *"YC companies that are currently hiring engineers, with their funding stage, location, and number of open roles."*
+## What this repo demonstrates
 
-BigSet infers the schema automatically, sends autonomous agents to research it on the live web, verifies what they find against real sources, deduplicates, and hands you a structured dataset. Download as CSV or XLSX.
+This branch is packaged as a public, reproducible reference for running BigSet with Hermes Agent and Codex OAuth:
 
-You can even set a refresh cadence (30 min, 6 hours, 12 hours, daily, weekly) and the agents re-run on schedule, pulling fresh data so the dataset never goes stale.
+- BigSet turns natural-language dataset ideas into typed, refreshable datasets.
+- Hermes Agent supplies the model/runtime layer through its OpenAI-compatible API server.
+- Hermes can use the `openai-codex` provider, so the same ChatGPT/Codex OAuth account that powers Hermes can power BigSet research without putting OAuth tokens in BigSet.
+- The agent-led `bigset` skill keeps prompts bounded and source-verifiable before population starts.
+- Completed datasets can be used in the UI, exported as CSV/XLSX, rendered into HTML/PDF reports, and emailed to yourself or a client with your own SMTP credentials.
+
+The current explainer video source and rendered media live in `artifacts/bigset-hermes-x-video/`.
 
 
-Built on [TinyFish](https://www.tinyfish.ai?utm_source=github&utm_medium=organic&utm_campaign=bigset-developer-2026q2) APIs.
+## BigSet skill workflow
 
+The preferred user workflow is agent-led, not manual prompt-writing.
 
-## Quick set up guide (~3 mins)
+When a user says “make a BigSet,” “create a new dataset,” or “build a dataset for this client,” load the Hermes skill named `bigset` and run a short discovery pass before creating the dataset prompt. The agent should clarify:
 
-<p align="center">
-  <a href="https://youtu.be/ixuOBI9qUnQ">
-    <img src="assets/demo-thumb.jpg" alt="Watch the demo" width="100%" />
-  </a>
-</p>
+1. business goal — what decision/action the dataset should drive;
+2. row target — companies, local businesses, venues, events, products, creators, jobs, RFPs, etc.;
+3. scope — geography, industry, audience, source constraints;
+4. qualifying public signal — event pages, job posts, procurement pages, vendor pages, menus, calendars, social/event pages, etc.;
+5. delivery — demo 10 rows or production 25 rows, BigSet link only or export/email.
 
-## ✨ Why BigSet?
+Then the agent creates the BigSet prompt using the expected structure:
 
-At the end of the day, every interaction with the web, whether it's you or your AI agent, ultimately comes down to data. Prices, companies, jobs, research, availability, inventory. The web has all of it, scattered across millions of pages.
+```text
+Create a dataset of <10 or 25> <target rows> for <business/user/context>.
 
-There are great tools out there for parts of this problem. Scraping frameworks that extract content from URLs you point them at. Search APIs that return ranked results. Pre-built actors for specific sites. Lead gen platforms that produce verified lists of people and companies. They work, and they work well for what they do.
+Goal:
+<business action this dataset should drive>
 
-But the moment you need something that cuts across those categories, or something none of them cover, you're back to square one. Stitching together search, extraction, schema design, deduplication, verification, and a cron job to keep it fresh. For every dataset. Every time. The data is right there on the web. Getting it into a table you can use is still a project.
+Scope:
+<geography, industry, source types, constraints>
 
-BigSet closes that gap. One sentence in, verified structured data out, refreshed on whatever cadence you set. Your agents get live data to reason over; you get a table you can actually use.
+Only include rows with public evidence that <qualification signal>.
 
-Any dataset. Any source. Always fresh. That's the idea.
+Columns:
+- <primary_name>
+- website
+- category / industry / type
+- location / geography, if relevant
+- <signal column>
+- signal_type
+- source_url
+- signal_date_or_event_date_if_available
+- likely_use_case
+- confidence_score or outreach_priority_score
+- why_it_matters / why_good_fit
+- first_outreach_note, if sales-oriented
 
-### How It Works
-
-1. **You describe the dataset** in plain English, as vague or specific as you like
-2. **AI infers the schema**: column names, types, primary keys, where to look on the web
-3. **An orchestrator agent** discovers entities via web search
-4. **Sub-agents fan out in parallel**: each one investigates a single entity, fetches real data, and inserts a verified row
-5. **You get a structured table**: browse it in the UI, export CSV or XLSX
-6. **Set a refresh cadence** and the agents re-run on schedule, keeping the dataset current automatically
-
-## Things to Know Before You Start
-
-- **It's experimental.** Expect rough edges; schema inference isn't always perfect, and some topics work better than others.
-- **Dataset generation takes 2-5 minutes.** The agents are doing real web research: searching, fetching pages, verifying data. It's not instant, but the output is real.
-- **It works best for topics with publicly available web data.** If the information exists on public web pages, BigSet can probably find it. Data behind logins or paywalls is out of reach for now.
-- **Scheduled refresh keeps datasets current.** Set a cadence (30 min to weekly) and the agents re-run automatically. No manual re-runs.
-- **Datasets are downloadable, not queryable.** You can browse in the UI and export CSV/XLSX. SQL query support is on the roadmap.
-
----
-
-## 🚀 Quick Start
-
-**Prerequisites:** [Node.js](https://nodejs.org/) 22+ with npm. No Docker needed.
-
-```bash
-npm install --global @adamexu/bigset
-bigset
+Rules:
+- Return <10 or 25> rows.
+- Every row must include a source_url.
+- Use public organization/business information only.
+- Do not scrape personal emails, private phone numbers, or individual staff contact details.
+- Skip rows where the qualifying signal cannot be verified from a public source.
+- Scores should be 1-100.
+- Keep explanations short and practical.
 ```
 
-That's it. The `bigset` command downloads the current local BigSet release,
-starts Convex, the backend, the frontend, and the local credential bridge, then
-prints the app URL. Open [127.0.0.1:3500](http://127.0.0.1:3500) in your web browser to use it.
+This avoids prompt drift and produces more useful, source-verifiable datasets than generic one-line prompts.
 
-The first run caches release files under `~/.bigset`; after that, starting
-BigSet is designed to take only a few seconds.
+## Execution modes
 
-On first launch, BigSet sends you to setup. You'll connect two services:
+| Mode | LLM provider | Web/search provider | Use when |
+|---|---|---|---|
+| `openrouter` | OpenRouter models | TinyFish search/fetch APIs | You want the original hosted/API-key flow. |
+| `hermes` | Hermes Agent, normally configured with OpenAI Codex / ChatGPT OAuth | Hermes tools: `web_search`, `web_extract`, optional browser automation | You want local-first BigSet runs backed by your Codex-capable ChatGPT account. |
 
-| Service | What it's for | Get your key |
-|---------|--------------|-------------|
-| **TinyFish** | Web search + page fetching | [tinyfish.ai/api-keys](https://agent.tinyfish.ai/api-keys?utm_source=github&utm_medium=organic&utm_campaign=bigset-developer-2026q2) |
-| **OpenRouter** | LLM calls (schema inference + agents) | [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) |
+In `hermes` mode BigSet does not call OpenRouter, TinyFish, or OpenAI directly. BigSet calls a local OpenAI-compatible Hermes API server. Hermes owns the Codex OAuth token, model selection, and web tooling.
 
-Local API keys are stored in your OS keychain.
+## Architecture in Hermes mode
 
-For a one-off run without installing globally:
-
-```bash
-npx @adamexu/bigset
+```text
+schema inference       -> Hermes /v1/chat/completions -> strict JSON schema
+candidate discovery    -> Hermes agent + web_search -> strict JSON entity list
+per-entity research    -> Hermes agent + web tools -> strict JSON row data
+row writes             -> BigSet insert_row tool -> Convex
+refresh runs           -> Hermes agent -> strict JSON update decision
 ```
 
-Useful local options:
+Hermes is an agent endpoint, not a raw tool-calling model. It does not execute arbitrary Mastra client-side tool arrays. BigSet therefore runs deterministic TypeScript orchestration around Hermes calls:
 
-| Command | What it does |
-|---------|-------------|
-| `bigset --force` | Redownload the latest cached release |
-| `bigset --app-port 4500 --backend-port 4501` | Use alternate app/backend ports |
-| `bigset --home ~/.bigset-dev` | Use a separate local cache directory |
+- Hermes returns data only.
+- BigSet validates JSON with Zod.
+- BigSet performs all inserts/updates itself.
+- The existing closure-scoped `buildPopulateTools()` authorization model remains intact.
 
----
+## Quick start: Hermes + Codex OAuth local mode
 
-## Developing From Source
+Prerequisites:
 
-Use this path when you're changing BigSet itself. The supported development
-workflow is still `make dev`.
+- Node.js 22+ with npm
+- Docker Desktop or compatible Docker engine
+- Make
+- Hermes Agent installed on the host
+- A ChatGPT/Codex account that exposes the Codex model you want to use
 
-**Prerequisites:** [Node.js](https://nodejs.org/) 22+ with npm,
-[Docker](https://docs.docker.com/get-docker/), and
-[Make](https://www.gnu.org/software/make/).
+### 1. Configure Hermes Agent
 
-### Step 1: Clone the repo
+Install Hermes if needed:
 
 ```bash
-git clone https://github.com/tinyfish-io/bigset.git
-cd bigset
+curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
 ```
 
-### Step 2: Start everything
+Add Codex OAuth credentials and pick the model:
+
+```bash
+hermes auth add openai-codex --type oauth
+hermes model
+```
+
+Choose the `openai-codex` provider and a Codex-visible model such as `gpt-5.5`.
+
+Enable/check tools:
+
+```bash
+hermes tools
+hermes doctor
+```
+
+At minimum, Hermes needs working `web_search` and `web_extract` tools for BigSet populate/refresh.
+
+### 2. Enable the Hermes API server
+
+Find the active Hermes env file:
+
+```bash
+hermes config env-path
+# or for a named profile:
+hermes -p <profile> config env-path
+```
+
+Add:
+
+```bash
+API_SERVER_ENABLED=true
+API_SERVER_HOST=0.0.0.0
+API_SERVER_PORT=8642
+API_SERVER_KEY=replace-this-local-secret
+```
+
+Start or restart the gateway:
+
+```bash
+hermes gateway restart
+# or foreground:
+hermes gateway run
+```
+
+Verify from the host:
+
+```bash
+curl http://127.0.0.1:8642/v1/models \
+  -H "Authorization: Bearer replace-this-local-secret"
+```
+
+### 3. Configure BigSet
+
+```bash
+cp .env.example .env
+```
+
+Set at least:
+
+```bash
+LLM_PROVIDER_MODE=hermes
+HERMES_API_KEY=replace-this-local-secret
+HERMES_BASE_URL=http://host.docker.internal:8642/v1
+HERMES_MODEL=hermes-agent
+```
+
+`host.docker.internal` is required because the backend runs in Docker and must reach the host-side Hermes gateway. If you run the backend directly on the host, use `http://127.0.0.1:8642/v1`.
+
+### 4. Start BigSet
 
 ```bash
 make dev
 ```
 
-`make dev` creates a local `.env` if needed, installs dependencies, builds and
-starts all Docker services (Postgres, Convex, frontend, backend, Mastra), and
-deploys the Convex schema. On first run, it automatically generates the Convex
-admin key. See [How `make dev` Works](#how-make-dev-works) for the full
-breakdown.
-
-Once everything is ready, you'll see:
+When ready:
 
 | Service | URL |
-|---------|-----|
-| **BigSet app** | [localhost:3500](http://localhost:3500) |
-| **Convex dashboard** | [localhost:6791](http://localhost:6791) |
-| **Mastra Studio** (workflow inspector) | [localhost:4111](http://localhost:4111) |
+|---|---|
+| BigSet app | http://localhost:3500 |
+| Backend API | http://localhost:3501 |
+| Mastra Studio | http://localhost:4111 |
+| Convex dashboard | http://localhost:6791 |
 
-Open [localhost:3500](http://localhost:3500). The setup screen will ask for
-TinyFish and OpenRouter credentials and save them to your OS keychain for this
-workspace.
+Open http://localhost:3500. In Hermes mode the setup screen checks the Hermes endpoint instead of asking for TinyFish/OpenRouter keys.
 
-### Step 3: Connect TinyFish and OpenRouter
+### 5. Smoke test
 
-TinyFish powers web search and page fetching. OpenRouter routes LLM calls to
-the models BigSet uses for schema inference and agents.
-
-1. Create a TinyFish key at [agent.tinyfish.ai/api-keys](https://agent.tinyfish.ai/api-keys?utm_source=github&utm_medium=organic&utm_campaign=bigset-developer-2026q2)
-2. Create an OpenRouter key at [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys)
-3. Paste both into BigSet's setup screen
-
-OpenRouter is pay-as-you-go; $5-10 is plenty to start.
-
-> **Note:** root `.env` is the only local env file. If you edit Convex functions in `frontend/convex/`, run `make convex-push` to deploy the changes.
-
-> **Free tier:** cloud signed-in accounts get **2,500 row operations per calendar month** (resets on the 1st, UTC). Local mode bypasses the cloud quota and uses your TinyFish/OpenRouter accounts directly.
-
-### Step 4 (optional): Load curated datasets
-
-BigSet includes 9 curated public datasets (AI companies hiring, GPU prices, model pricing, etc.) that show on the landing page:
-
-```bash
-make seed-public-datasets
-```
-
-This is idempotent; safe to run multiple times.
-
----
-
-## How `make dev` Works
-
-`make dev` is designed to handle everything — first run, subsequent runs, and recovery from bad state. You should never need to run any other setup command. Here's what it does, in order:
-
-1. **Validates your `.env`** — creates local keychain bridge settings automatically.
-2. **Installs dependencies** — runs `npm install` in both `frontend/` and `backend/`. Silent if already up to date.
-3. **Starts the local keychain bridge** — runs a host-side helper so Docker services can read/write this workspace's OS keychain entries.
-4. **Starts the database layer** — brings up Postgres and Convex (self-hosted) first, since other services depend on them.
-5. **Waits for Convex** — polls the Convex health endpoint until it's ready (up to 120s).
-6. **Ensures the admin key** — if `CONVEX_SELF_HOSTED_ADMIN_KEY` is empty in `.env`, generates one automatically and writes it. If a key exists, validates it against the running Convex instance. If the key is stale (e.g. you ran `make clean` and wiped the database), it detects the mismatch and regenerates.
-7. **Configures Convex auth** — sets `BIGSET_LOCAL_MODE=1` for the local app.
-8. **Deploys Convex schema** — pushes the table schema and functions from `frontend/convex/` to the running instance.
-9. **Starts remaining services** — brings up the frontend, backend, and Mastra. These read the now-populated `.env` including the admin key.
-10. **Streams logs** — tails all container logs so you can see what's happening. `Ctrl+C` to stop watching (containers keep running).
-
-### Commands
-
-You only need three commands:
-
-| Command | What it does |
-|---------|-------------|
-| `make dev` | Start everything (or recover from any broken state) |
-| `make down` | Stop all containers (data is preserved) |
-| `make clean` | Stop containers, delete all data, and clear the admin key |
-
-Other commands you might use during development:
-
-| Command | What it does |
-|---------|-------------|
-| `make convex-push` | Deploy Convex schema changes (run after editing `frontend/convex/`) |
-| `make seed-public-datasets` | Load 9 curated public datasets for the landing page |
-
-### What if something goes wrong?
-
-`make dev` is self-healing. If you hit a problem, the fix is almost always just running `make dev` again.
-
-| Problem | What happens |
-|---------|-------------|
-| Missing `.env` | `make dev` creates a local one automatically |
-| Stale admin key (after `make clean`) | Detected automatically, regenerated |
-| Containers already running | No-op for running services, starts any that are missing |
-| Convex won't start | Error after 120s timeout — check Docker is running |
-
-If you want a completely fresh start: `make clean` then `make dev`.
-
----
-
-## Your `.env` at a Glance
-
-| Variable | Required | Where to get it |
-|----------|----------|----------------|
-| `CONVEX_SELF_HOSTED_ADMIN_KEY` | Auto | Auto-generated by `make dev` on first run |
-| `LOCAL_KEYCHAIN_PORT`, `LOCAL_KEYCHAIN_TOKEN`, `BIGSET_LOCAL_WORKSPACE_ID` | Auto | Auto-generated by `make dev` for local OS keychain access |
-| `RESEND_API_KEY` | Optional | For "dataset ready" emails. Leave blank to skip. |
-| `NEXT_PUBLIC_POSTHOG_KEY` | Optional | For product analytics. Leave blank to disable. |
-
----
-
-## 🛠 Tech Stack
-
-| Layer | Tech |
-|-------|------|
-| Frontend | Next.js 16, React 19, Tailwind 4 |
-| Backend | Fastify, TypeScript (agent runner) |
-| Auth | Local auth (dev); [Clerk](https://clerk.com) (cloud) |
-| Database | [Convex](https://convex.dev) (self-hosted) |
-| Data Collection | [TinyFish](https://www.tinyfish.ai?utm_source=github&utm_medium=organic&utm_campaign=bigset-developer-2026q2) APIs (Search, Fetch, Browser) |
-| AI orchestration | [Mastra](https://mastra.ai) workflows + [Vercel AI SDK](https://sdk.vercel.ai) + [OpenRouter](https://openrouter.ai) → Claude Sonnet (schema inference + populate agent) |
-| Table view | [TanStack Table](https://tanstack.com/table) + [react-window](https://github.com/bvaughn/react-window) virtualization |
-| Exports | CSV (built-in) + XLSX ([SheetJS](https://sheetjs.com), dynamic-imported) |
-| Analytics | [PostHog](https://posthog.com) — events, session replay, error tracking (optional) |
-
-## 📁 Project Structure
+Create a small bounded dataset first:
 
 ```text
-bigset/
-├── frontend/            Next.js 16 — UI + Convex schema & functions
-│   ├── convex/          Convex functions, schema, authz + quota helpers
-├── backend/             Fastify + Mastra — schema inference + populate agent
-│   ├── src/pipeline/    Pure pipelines: schema inference + populate context
-│   ├── src/mastra/      Mastra workflows, agents, and tools (Studio at :4111 in dev)
-│   ├── src/email/       Transactional email (Resend) — sends "dataset ready" notifications
-│   └── src/analytics/   Server-side PostHog wrapper for backend-only events
-├── scripts/             One-off scripts (e.g. verify-authz.sh)
-├── .env                 Local env for frontend, backend, Convex CLI, and Docker (not committed)
-├── docker-compose.dev.yml
-└── Makefile
+5 popular open-source database engines with license and first release year
 ```
 
----
+Expected behavior:
 
-## 🛣️ Roadmap
-
-We're building BigSet in the open. Here's what's coming:
-
-- [ ] **TinyFish Browser + Agent integration** — For JS-heavy sites, SPAs, and pages that need interaction to reveal data.
-- [ ] **Agent-native API** — So your agents can create, query, and consume BigSet datasets programmatically. Build datasets on the fly, export them, feed them to your agents today. Next up: agents generate and query datasets directly.
-- [ ] **SQL query layer** — Query your datasets with SQL instead of just exporting.
-- [ ] **Per-cell source provenance** — Click any cell to see exactly where the data came from.
-- [ ] **Healer agents** — Automatically detect and fix broken or stale rows.
-- [ ] **Incremental updates** — Refresh only what changed instead of rebuilding the whole dataset.
-
----
-
-## 🏗 Building in Public
-
-BigSet is a work in progress. We're building in the open because the best ideas come from the people who actually want to use the thing.
-
-We'd love your feedback, ideas, or help building — come say hi:
-
-- 🐦 **Twitter:** [@Tiny_Fish](https://x.com/Tiny_Fish) for project updates
-- 🗣 **Twitter:** [@not_simantak](https://x.com/not_simantak) for the unfiltered version
-- 🐛 **GitHub Issues:** [Report bugs or request features](https://github.com/tinyfish-io/bigset/issues)
+- schema inference returns a compact schema;
+- populate target resolves to 5 rows;
+- discovery uses a bounded candidate batch;
+- rows appear live in the table;
+- CSV/XLSX export works.
 
 
-## Star History
+## Export and email a completed dataset report
 
-<p align="center">
-  <a href="https://www.star-history.com/#tinyfish-io/bigset&type=date">
-    <img src="https://api.star-history.com/svg?repos=tinyfish-io/bigset&type=date&legend=top-left" alt="Star History Chart">
-  </a>
-</p>
+The app UI exports CSV/XLSX. The repo also includes a public, scriptable report flow for client-ready delivery:
+
+```bash
+# Replace with a live dataset id from http://localhost:3500/dataset/<id>
+node scripts/with-root-env.mjs node scripts/export-dataset-report.mjs \
+  --dataset-id <dataset_id> \
+  --title "Client-ready BigSet report" \
+  --out-dir artifacts/dataset-reports/<dataset_id>
+
+# Optional: email the generated PDF with your own SMTP credentials.
+SMTP_HOST=smtp.example.com \
+SMTP_PORT=587 \
+SMTP_USER=you@example.com \
+SMTP_PASSWORD=app-password-or-secret \
+EMAIL_FROM="BigSet <you@example.com>" \
+EMAIL_TO=client@example.com \
+EMAIL_SUBJECT="Your BigSet dataset report" \
+EMAIL_ATTACHMENT=artifacts/dataset-reports/<dataset_id>/report.pdf \
+python3 scripts/send-dataset-report.py
+```
+
+This is intentionally externalized into scripts rather than hardcoded into the app: BigSet should never store your ChatGPT/Codex OAuth token or your mail password. Use app passwords, SMTP relay credentials, or your own transactional email provider.
 
 
-## 🤝 Contributing
+## Original OpenRouter + TinyFish mode
 
-<a href="https://github.com/tinyfish-io/bigset/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=tinyfish-io/bigset" />
-</a>
+Leave `LLM_PROVIDER_MODE` unset or set it to `openrouter`, then provide TinyFish and OpenRouter credentials through setup or `.env`.
 
-^ This awesome team is behind BigSet! We'd love to have you on board :) 
+```bash
+LLM_PROVIDER_MODE=openrouter
+TINYFISH_API_KEY=...
+OPENROUTER_API_KEY=...
+```
 
-Contributions are very welcome — whether it's code, feedback, or just telling us what datasets you'd want to build.
+## Key environment variables
 
-1. Fork the repo
-2. Create a branch (`git checkout -b my-feature`)
-3. Make your changes
-4. Run `bash scripts/verify-authz.sh` to confirm the authorization layer still holds
-5. Open a PR
+| Variable | Default | Meaning |
+|---|---:|---|
+| `LLM_PROVIDER_MODE` | `openrouter` | Set to `hermes` to route LLM + web research through Hermes Agent. |
+| `HERMES_BASE_URL` | `http://host.docker.internal:8642/v1` | Hermes API server base URL from Docker. |
+| `HERMES_API_KEY` | empty | Must match Hermes `API_SERVER_KEY` in Hermes mode. |
+| `HERMES_MODEL` | `hermes-agent` | Cosmetic model id sent to Hermes; Hermes config chooses the real provider/model. |
+| `HERMES_CHAT_TIMEOUT_MS` | `180000` | Timeout for schema/non-web Hermes calls. |
+| `HERMES_DISCOVERY_TIMEOUT_MS` | `120000` | Timeout for fast candidate-discovery calls. |
+| `HERMES_RESEARCH_TIMEOUT_MS` | `480000` | Timeout for per-entity research and refresh calls. |
+| `HERMES_MAX_ROWS` | `25` | Overall safety cap for local Hermes populate runs. Prompt counts such as `25 companies` are respected up to this cap. |
+| `HERMES_BATCH_MAX_ROWS` | `10` | Per-batch row target. Larger runs are split into bounded batches instead of one large agentic wave. |
+| `HERMES_MAX_CANDIDATES_PER_ROUND` | `15` | Safety cap for discovery candidates per bounded batch. |
+| `HERMES_MAX_CONCURRENT` | `2` | Parallel per-entity Hermes research calls. Increase cautiously. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | empty | Optional SMTP credentials for sending generated dataset reports to yourself or clients. |
+| `EMAIL_FROM`, `EMAIL_TO`, `EMAIL_SUBJECT`, `EMAIL_ATTACHMENT` | empty | Optional report-delivery values used by `scripts/send-dataset-report.py`. |
+| `CONVEX_SELF_HOSTED_ADMIN_KEY` | auto | Generated by `make dev` for local self-hosted Convex. |
+| `LOCAL_KEYCHAIN_PORT`, `LOCAL_KEYCHAIN_TOKEN`, `BIGSET_LOCAL_WORKSPACE_ID` | auto | Generated by `make dev` for the local keychain bridge. |
 
-If you're not sure where to start, [open an issue](https://github.com/tinyfish-io/bigset/issues) or come say hi.
+## Development workflow
 
-## 📄 License
+```bash
+make dev          # start/recover local stack
+make down         # stop containers, preserve data
+make clean        # stop containers and delete local volumes
+make convex-push  # deploy changed frontend/convex functions
+```
 
-[AGPL-3.0](LICENSE)
+`make dev` bootstraps the local stack: it creates `.env` if needed, installs frontend/backend dependencies, starts the local keychain bridge, starts Postgres + self-hosted Convex, validates/generates the Convex admin key, deploys Convex functions, starts frontend/backend/Mastra, and streams logs.
+
+If you edit Convex functions under `frontend/convex/`, run `make convex-push`. Convex does not hot-reload those functions from the mounted source tree.
+
+## Deployment notes
+
+This repo is primarily wired for local Docker development. For a public/self-hosted deployment, deploy the same four layers explicitly:
+
+1. Frontend: Next.js app from `frontend/`.
+2. Backend: Fastify app from `backend/`.
+3. Convex: self-hosted Convex plus deployed functions from `frontend/convex/`.
+4. Hermes: a reachable Hermes Agent gateway if using `LLM_PROVIDER_MODE=hermes`.
+
+Production-style environment:
+
+```bash
+PROD=1
+CLIENT_ORIGIN=https://your-frontend.example
+CONVEX_URL=https://your-convex.example
+CONVEX_SELF_HOSTED_ADMIN_KEY=...
+NEXT_PUBLIC_CONVEX_URL=https://your-convex.example
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...
+CLERK_SECRET_KEY=...
+CLERK_JWT_ISSUER_DOMAIN=https://your-clerk-issuer.example
+
+# Hermes mode only:
+LLM_PROVIDER_MODE=hermes
+HERMES_BASE_URL=https://your-hermes-gateway.example/v1
+HERMES_API_KEY=...
+```
+
+Deploy Convex functions after changing schema/functions:
+
+```bash
+cd frontend
+npx convex deploy --url "$CONVEX_URL" --admin-key "$CONVEX_SELF_HOSTED_ADMIN_KEY"
+```
+
+If the Hermes API server is reachable over a network, put TLS and authentication/rate limits in front of it. Never expose an unauthenticated Hermes gateway.
+
+## Tech stack
+
+| Layer | Tech |
+|---|---|
+| Frontend | Next.js 16, React 19, Tailwind 4 |
+| Backend | Fastify, TypeScript, ESM |
+| Workflow inspector | Mastra workflows + Mastra Studio |
+| Database | Self-hosted Convex + Postgres |
+| Hermes mode LLM/web | Hermes Agent API server + OpenAI Codex OAuth + Hermes web tools |
+| Original mode LLM/web | OpenRouter + TinyFish APIs |
+| Table view | TanStack Table + react-window virtualization |
+| Exports | CSV + XLSX via SheetJS |
+| Optional analytics/email | PostHog + Resend |
+
+## Project structure
+
+```text
+bigset-oauth/
+├── frontend/                 Next.js UI + Convex schema/functions
+│   └── convex/               Convex schema, authz, rows, model config, seed data
+├── backend/                  Fastify + Mastra + Hermes/OpenRouter adapters
+│   ├── src/hermes/           Hermes HTTP client and JSON research orchestration
+│   ├── src/pipeline/         Schema inference and dataset type contracts
+│   ├── src/mastra/           Original workflows/agents/tools and Hermes branch points
+│   ├── src/email/            Optional dataset-ready email
+│   └── src/analytics/        Optional PostHog wrapper
+├── scripts/                  Build/release, verification, report export, and optional SMTP send helpers
+├── artifacts/                Public explainer/video artifacts
+├── makefiles/                Local Docker workflow
+├── HERMES_MODE.md            Operator guide for Hermes/Codex mode
+├── IMPLEMENTATION_NOTES.md   Code-level notes on what was replaced
+├── docker-compose.dev.yml    Local stack
+└── .env.example              Public env template
+```
+
+## Verification checklist before publishing changes
+
+```bash
+cd backend && npm run build
+cd ../frontend && npm run build
+bash scripts/verify-authz.sh
+```
+
+Also run a small Hermes-mode populate test and verify rows appear in the UI. For public video/report changes, verify the HyperFrames artifact and generated report paths too:
+
+```bash
+cd artifacts/bigset-hermes-x-video && npm run check
+node scripts/with-root-env.mjs node scripts/export-dataset-report.mjs --dataset-id <live_dataset_id> --out-dir /tmp/bigset-report-test
+```
+
+## License
+
+AGPL-3.0. See `LICENSE`.

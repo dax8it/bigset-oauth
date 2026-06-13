@@ -5,6 +5,8 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { datasetContextSchema, populateColumnSchema } from "../../pipeline/populate.js";
 import { convex, internal } from "../../convex.js";
 import { DEFAULT_MODEL_IDS } from "../../config/models.js";
+import { env } from "../../env.js";
+import { runHermesPopulate } from "../../hermes/populate-run.js";
 import { requireOpenRouterApiKey } from "../../local-credentials.js";
 import { buildPopulateAgent } from "../agents/populate.js";
 import { RunMetrics } from "../run-metrics.js";
@@ -108,6 +110,24 @@ Answer "search" if no — entities must be discovered through broad web searches
 Respond with EXACTLY one word: scraper or search`;
 
     let classification: "scraper" | "search" = "search";
+    if (env.IS_HERMES_MODE) {
+      // hermes mode: skip the OpenRouter classification call. The hermes
+      // populate run receives sourceHint directly and lets the research
+      // agent decide how to use it, so the scraper/search split adds no
+      // value — default to "search" and move on.
+      console.log(
+        `[enumerate] hermes mode — skipping classification, defaulting to "search"`,
+      );
+      return {
+        ...inputData,
+        enumerationStrategy: classification,
+        manifest: [],
+        // In Hermes mode, discovery is an agentic search step. Do not pin it
+        // to schema-inferred source hints: those are often guessed directory
+        // URLs, and one dead page can stall the whole Hermes call.
+        sourceUrl: undefined,
+      };
+    }
     try {
       const apiKey = await requireOpenRouterApiKey();
       const openrouter = createOpenRouter({
@@ -161,6 +181,11 @@ const buildPromptOutputSchema = z.object({
   authContext: authContextSchema,
   columns: z.array(populateColumnSchema),
   maxRowCount: z.number().int().min(1),
+  // Needed by the hermes-mode populate run, which builds its own
+  // discovery/investigation prompts instead of using `prompt` above.
+  datasetName: z.string(),
+  description: z.string(),
+  sourceUrl: z.string().optional(),
 });
 
 const buildPromptStep = createStep({
@@ -218,6 +243,9 @@ Stop the populate run as soon as the dataset reaches ${inputData.maxRowCount} ro
       authContext: inputData.authContext,
       columns: inputData.columns,
       maxRowCount: inputData.maxRowCount,
+      datasetName: inputData.datasetName,
+      description: inputData.description,
+      sourceUrl: inputData.sourceUrl,
     };
   },
 });
@@ -247,6 +275,23 @@ const agentStep = createStep({
     let errorMsg: string | undefined;
 
     try {
+      if (env.IS_HERMES_MODE) {
+        // hermes mode: deterministic TS orchestration around the hermes
+        // agent endpoint. Same metrics object, same abort registry, same
+        // closure-scoped insert path — see src/hermes/populate-run.ts.
+        const text = await runHermesPopulate({
+          authorizedDatasetId: inputData.authorizedDatasetId,
+          authContext: inputData.authContext,
+          datasetName: inputData.datasetName,
+          description: inputData.description,
+          columns: inputData.columns,
+          maxRowCount: inputData.maxRowCount,
+          sourceHint: inputData.sourceUrl,
+          metrics,
+        });
+        return { text };
+      }
+
       const agent = buildPopulateAgent(
         inputData.authorizedDatasetId,
         inputData.authContext,

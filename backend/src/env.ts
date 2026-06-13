@@ -18,10 +18,57 @@ function numberFromEnv(name: string, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+/**
+ * LLM provider mode.
+ *
+ * "openrouter" (default) — original behavior: OpenRouter for all LLM calls,
+ *   TinyFish for web search/fetch. Nothing changes.
+ *
+ * "hermes" — all LLM + web work flows through a locally running
+ *   hermes-agent API server (https://hermes-agent.nousresearch.com).
+ *   Hermes is configured separately with the "OpenAI Codex" provider
+ *   (ChatGPT OAuth → GPT-5.5), so every model call runs on the user's
+ *   ChatGPT subscription and all web research uses hermes' own
+ *   web_search / web_extract tools. OpenRouter and TinyFish keys are
+ *   not required in this mode.
+ */
+const llmProviderMode =
+  process.env.LLM_PROVIDER_MODE === "hermes" ? "hermes" : "openrouter";
+
 export const env = {
   PROD: process.env.PROD,
   IS_PROD: process.env.PROD === "1",
   IS_LOCAL_MODE: process.env.PROD !== "1",
+
+  LLM_PROVIDER_MODE: llmProviderMode as "openrouter" | "hermes",
+  IS_HERMES_MODE: llmProviderMode === "hermes",
+
+  // hermes-agent API server (OpenAI-compatible agent endpoint).
+  // Inside Docker, 127.0.0.1 is the container — use host.docker.internal
+  // to reach a hermes gateway running on the host machine.
+  HERMES_BASE_URL: (
+    process.env.HERMES_BASE_URL || "http://host.docker.internal:8642/v1"
+  ).replace(/\/+$/, ""),
+  // Must match API_SERVER_KEY in ~/.hermes/.env on the host.
+  HERMES_API_KEY: process.env.HERMES_API_KEY || "",
+  // Cosmetic — the hermes API server uses its own configured provider/model.
+  HERMES_MODEL: process.env.HERMES_MODEL || "hermes-agent",
+  // Agentic research calls (web search + multi-step reasoning) are slow.
+  // These bound a single hermes chat call, not the whole populate run.
+  HERMES_RESEARCH_TIMEOUT_MS: numberFromEnv("HERMES_RESEARCH_TIMEOUT_MS", 480_000),
+  HERMES_DISCOVERY_TIMEOUT_MS: numberFromEnv("HERMES_DISCOVERY_TIMEOUT_MS", 120_000),
+  HERMES_CHAT_TIMEOUT_MS: numberFromEnv("HERMES_CHAT_TIMEOUT_MS", 180_000),
+  // Concurrent per-entity research calls during a populate run. A single
+  // hermes gateway handles concurrent requests, but keep this modest.
+  HERMES_MAX_CONCURRENT: numberFromEnv("HERMES_MAX_CONCURRENT", 2),
+  // Overall local cap for a populate run. Larger runs are split into
+  // bounded batches so no single discovery/investigation wave gets too big.
+  HERMES_MAX_ROWS: numberFromEnv("HERMES_MAX_ROWS", 25),
+  HERMES_BATCH_MAX_ROWS: numberFromEnv("HERMES_BATCH_MAX_ROWS", 10),
+  HERMES_MAX_CANDIDATES_PER_ROUND: numberFromEnv(
+    "HERMES_MAX_CANDIDATES_PER_ROUND",
+    15,
+  ),
   CLIENT_ORIGIN: process.env.CLIENT_ORIGIN || "http://localhost:3500",
   CONVEX_URL: required("CONVEX_URL"),
   PORT: numberFromEnv("PORT", 3501),
